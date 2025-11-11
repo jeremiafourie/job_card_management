@@ -88,6 +88,13 @@ class DashboardViewModel @Inject constructor(
             initialValue = emptyList()
         )
 
+    val availableFixed = fixedRepository.getAvailableFixed()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
     // Dashboard stats - focus on available jobs, awaiting jobs, active jobs, and pending jobs
     val stats: StateFlow<DashboardStats> = combine(
         myJobs,
@@ -265,6 +272,31 @@ class DashboardViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 _uiMessage.value = "Error adding resource: ${e.message}"
+            }
+        }
+    }
+
+    fun checkoutFixedAssetToJob(jobId: Int, fixedId: Int, reason: String) {
+        viewModelScope.launch {
+            try {
+                val job = jobCardRepository.getJobById(jobId)
+                val jobNumber = job?.jobNumber ?: "JOB$jobId"
+
+                val success = fixedRepository.checkoutFixed(
+                    fixedId = fixedId,
+                    reason = reason,
+                    jobId = jobId,
+                    condition = "Good",
+                    notes = "Checked out for $jobNumber"
+                )
+
+                if (success) {
+                    _uiMessage.value = "Fixed asset checked out successfully"
+                } else {
+                    _uiMessage.value = "Failed to checkout fixed asset"
+                }
+            } catch (e: Exception) {
+                _uiMessage.value = "Error checking out fixed asset: ${e.message}"
             }
         }
     }

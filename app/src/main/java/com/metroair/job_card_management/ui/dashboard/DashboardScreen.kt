@@ -21,7 +21,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.metroair.job_card_management.domain.model.JobCard
 import com.metroair.job_card_management.domain.model.JobStatus
-import com.metroair.job_card_management.ui.components.AddAssetDialog
+import com.metroair.job_card_management.ui.components.AddJobMaterialDialog
 import com.metroair.job_card_management.ui.components.PhotoCaptureDialog
 import com.metroair.job_card_management.ui.components.PhotoCategory
 import com.metroair.job_card_management.ui.components.createImageFile
@@ -38,6 +38,7 @@ fun DashboardScreen(
     val stats by viewModel.stats.collectAsStateWithLifecycle()
     val uiMessage by viewModel.uiMessage.collectAsStateWithLifecycle()
     val availableAssets by viewModel.availableAssets.collectAsStateWithLifecycle()
+    val availableFixed by viewModel.availableFixed.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
@@ -215,17 +216,25 @@ fun DashboardScreen(
 
     // Add Asset Dialog
     if (showAssetDialog && currentJobForPhoto != null) {
-        AddAssetDialog(
+        AddJobMaterialDialog(
             onDismiss = {
                 showAssetDialog = false
                 currentJobForPhoto = null
             },
-            onAssetAdded = { itemName, itemCode, quantity ->
+            onCurrentAssetAdded = { itemName, itemCode, quantity ->
                 viewModel.addAssetToJob(currentJobForPhoto!!.id, itemName, itemCode, quantity)
                 showAssetDialog = false
                 currentJobForPhoto = null
             },
-            availableAssets = availableAssets
+            onFixedAssetAdded = { fixedId, reason ->
+                viewModel.checkoutFixedAssetToJob(currentJobForPhoto!!.id, fixedId, reason)
+                showAssetDialog = false
+                currentJobForPhoto = null
+            },
+            availableAssets = availableAssets,
+            availableFixed = availableFixed,
+            jobNumber = currentJobForPhoto!!.jobNumber,
+            jobId = currentJobForPhoto!!.id
         )
     }
 }
@@ -295,6 +304,56 @@ fun CurrentJobCard(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                 )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Time information row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Scheduled time
+                if (job.scheduledDate != null || job.scheduledTime != null) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f, fill = false)
+                    ) {
+                        Icon(
+                            Icons.Default.Schedule,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                        )
+                        Text(
+                            text = "${job.scheduledDate ?: ""} ${job.scheduledTime ?: ""}".trim(),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+
+                // Estimated duration
+                if (job.estimatedDuration != null && job.estimatedDuration > 0) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.Timer,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                        )
+                        Text(
+                            text = "${job.estimatedDuration} min",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(12.dp))

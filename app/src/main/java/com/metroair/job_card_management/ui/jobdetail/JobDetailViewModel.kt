@@ -5,9 +5,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.metroair.job_card_management.data.repository.JobCardRepository
 import com.metroair.job_card_management.data.repository.AssetRepository
+import com.metroair.job_card_management.data.repository.FixedRepository
 import com.metroair.job_card_management.domain.model.JobCard
 import com.metroair.job_card_management.domain.model.JobResource
 import com.metroair.job_card_management.domain.model.JobStatus
+import com.metroair.job_card_management.domain.model.FixedCheckout
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -19,6 +21,7 @@ import javax.inject.Inject
 class JobDetailViewModel @Inject constructor(
     private val jobCardRepository: JobCardRepository,
     private val assetRepository: AssetRepository,
+    private val fixedRepository: FixedRepository,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -35,6 +38,20 @@ class JobDetailViewModel @Inject constructor(
         )
 
     val availableAssets = assetRepository.getAllAssets()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val availableFixed = fixedRepository.getAvailableFixed()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val fixedCheckouts = fixedRepository.getCheckoutsForJob(jobId)
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -157,6 +174,8 @@ class JobDetailViewModel @Inject constructor(
             )
 
             if (success) {
+                // Return all fixed assets checked out for this job
+                returnAllFixedAssets()
                 _uiState.update { it.copy(successMessage = "Job completed successfully", isCompleted = true) }
             } else {
                 _uiState.update { it.copy(errorMessage = "Failed to complete job") }
@@ -204,6 +223,39 @@ class JobDetailViewModel @Inject constructor(
     fun removeResource(itemCode: String) {
         _uiState.update { state ->
             state.copy(resources = state.resources.filter { it.itemCode != itemCode })
+        }
+    }
+
+    // Fixed asset management
+    fun checkoutFixedAsset(fixedId: Int, reason: String) {
+        viewModelScope.launch {
+            val jobNumber = jobCard.value?.jobNumber ?: "JOB$jobId"
+            val success = fixedRepository.checkoutFixed(
+                fixedId = fixedId,
+                reason = reason,
+                jobId = jobId,
+                condition = "Good",
+                notes = "Checked out for $jobNumber"
+            )
+
+            if (success) {
+                _uiState.update { it.copy(successMessage = "Fixed asset checked out successfully") }
+            } else {
+                _uiState.update { it.copy(errorMessage = "Failed to checkout fixed asset") }
+            }
+        }
+    }
+
+    private suspend fun returnAllFixedAssets() {
+        // Return all fixed assets checked out for this job
+        fixedCheckouts.value.forEach { checkout ->
+            if (checkout.returnTime == null) {
+                fixedRepository.returnFixed(
+                    checkoutId = checkout.id,
+                    condition = "Good",
+                    notes = "Automatically returned on job completion"
+                )
+            }
         }
     }
 

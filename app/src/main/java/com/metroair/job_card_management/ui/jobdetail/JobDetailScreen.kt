@@ -22,7 +22,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
-import com.metroair.job_card_management.ui.components.AddAssetDialog
+import com.metroair.job_card_management.ui.components.AddJobMaterialDialog
 import com.metroair.job_card_management.ui.components.JobTimelineCard
 import com.metroair.job_card_management.ui.components.PhotoCaptureDialog
 import com.metroair.job_card_management.ui.components.PhotoCategory
@@ -41,6 +41,8 @@ fun JobDetailScreen(
     val jobCard by viewModel.jobCard.collectAsStateWithLifecycle()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val availableAssets by viewModel.availableAssets.collectAsStateWithLifecycle()
+    val availableFixed by viewModel.availableFixed.collectAsStateWithLifecycle()
+    val fixedCheckouts by viewModel.fixedCheckouts.collectAsStateWithLifecycle()
     var showSignatureDialog by remember { mutableStateOf(false) }
     var showResourceDialog by remember { mutableStateOf(false) }
     var showPhotoDialog by remember { mutableStateOf(false) }
@@ -409,10 +411,10 @@ fun JobDetailScreen(
                                 }
                             }
 
-                            if (uiState.resources.isEmpty()) {
+                            if (uiState.resources.isEmpty() && fixedCheckouts.isEmpty()) {
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    text = "No resources recorded yet",
+                                    text = "No materials recorded yet",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -463,6 +465,58 @@ fun JobDetailScreen(
                                     }
                                     if (resource != uiState.resources.last()) {
                                         HorizontalDivider()
+                                    }
+                                }
+
+                                // Display Fixed Assets (checked out tools/equipment)
+                                if (fixedCheckouts.isNotEmpty() && uiState.resources.isNotEmpty()) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    HorizontalDivider()
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                }
+
+                                fixedCheckouts.forEach { checkout ->
+                                    if (checkout.returnTime == null) { // Only show active checkouts
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 4.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Row(
+                                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.Build,
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(16.dp),
+                                                        tint = MaterialTheme.colorScheme.primary
+                                                    )
+                                                    Text(
+                                                        text = checkout.fixedName,
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = FontWeight.Medium
+                                                    )
+                                                }
+                                                Text(
+                                                    text = "Code: ${checkout.fixedCode}",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                            Text(
+                                                text = "Checked out",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        }
+                                        if (checkout != fixedCheckouts.filter { it.returnTime == null }.last()) {
+                                            HorizontalDivider()
+                                        }
                                     }
                                 }
                             }
@@ -696,15 +750,24 @@ fun JobDetailScreen(
     }
 
     // Add Resource Dialog
-    if (showResourceDialog) {
-        AddAssetDialog(
-            onDismiss = { showResourceDialog = false },
-            onAssetAdded = { itemName, itemCode, quantity ->
-                viewModel.addResource(itemName, itemCode, quantity)
-                showResourceDialog = false
-            },
-            availableAssets = availableAssets
-        )
+    jobCard?.let { job ->
+        if (showResourceDialog) {
+            AddJobMaterialDialog(
+                onDismiss = { showResourceDialog = false },
+                onCurrentAssetAdded = { itemName, itemCode, quantity ->
+                    viewModel.addResource(itemName, itemCode, quantity)
+                    showResourceDialog = false
+                },
+                onFixedAssetAdded = { fixedId, reason ->
+                    viewModel.checkoutFixedAsset(fixedId, reason)
+                    showResourceDialog = false
+                },
+                availableAssets = availableAssets,
+                availableFixed = availableFixed,
+                jobNumber = job.jobNumber,
+                jobId = job.id
+            )
+        }
     }
 
     // Photo Capture Dialog
