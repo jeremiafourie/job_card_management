@@ -59,7 +59,7 @@ interface JobCardRepository {
     suspend fun removePhoto(jobId: Int, photoUri: String, category: String): Boolean
     suspend fun retagPhoto(jobId: Int, photoUri: String, fromCategory: String, toCategory: String): Boolean
     suspend fun updatePhotoNotes(jobId: Int, photoUri: String, category: String, notes: String): Boolean
-    suspend fun updateJobResources(jobId: Int, resourcesJson: String): Boolean
+    suspend fun updateJobAssets(jobId: Int, resourcesJson: String): Boolean
 
     // Stats
     suspend fun getTodayCompletedCount(): Int
@@ -656,7 +656,7 @@ class JobCardRepositoryImpl @Inject constructor(
             }
         }
 
-    override suspend fun updateJobResources(jobId: Int, resourcesJson: String): Boolean =
+    override suspend fun updateJobAssets(jobId: Int, resourcesJson: String): Boolean =
         withContext(ioDispatcher) {
             try {
                 val job = jobCardDao.getJobById(jobId) ?: return@withContext false

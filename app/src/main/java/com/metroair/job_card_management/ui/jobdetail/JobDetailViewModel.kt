@@ -4,7 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.metroair.job_card_management.data.repository.JobCardRepository
-import com.metroair.job_card_management.data.repository.ResourceRepository
+import com.metroair.job_card_management.data.repository.AssetRepository
 import com.metroair.job_card_management.domain.model.JobCard
 import com.metroair.job_card_management.domain.model.JobResource
 import com.metroair.job_card_management.domain.model.JobStatus
@@ -18,7 +18,7 @@ import javax.inject.Inject
 @HiltViewModel
 class JobDetailViewModel @Inject constructor(
     private val jobCardRepository: JobCardRepository,
-    private val resourceRepository: ResourceRepository,
+    private val assetRepository: AssetRepository,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -34,7 +34,7 @@ class JobDetailViewModel @Inject constructor(
             initialValue = null
         )
 
-    val availableResources = resourceRepository.getAllResources()
+    val availableAssets = assetRepository.getAllAssets()
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -182,7 +182,7 @@ class JobDetailViewModel @Inject constructor(
             } else {
                 // Find unit from available resources
                 viewModelScope.launch {
-                    resourceRepository.getAllResources().first().find { it.itemCode == itemCode }?.let { resource ->
+                    assetRepository.getAllAssets().first().find { it.itemCode == itemCode }?.let { resource ->
                         currentResources.add(
                             JobResource(
                                 resourceId = resource.id,

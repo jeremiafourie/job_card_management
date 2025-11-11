@@ -29,7 +29,7 @@ import androidx.navigation.navArgument
 import com.metroair.job_card_management.ui.dashboard.DashboardScreen
 import com.metroair.job_card_management.ui.jobdetail.JobDetailScreen
 import com.metroair.job_card_management.ui.jobs.JobsScreen
-import com.metroair.job_card_management.ui.resources.ResourcesScreen
+import com.metroair.job_card_management.ui.assets.AssetsScreen
 import com.metroair.job_card_management.ui.settings.SettingsScreen
 import com.metroair.job_card_management.ui.theme.JobCardTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -77,7 +77,7 @@ fun MainScreen() {
                     }
                 )
             ) { JobsScreen(navController) }
-            composable("resources") { ResourcesScreen() }
+            composable("assets") { AssetsScreen() }
             composable("settings") { SettingsScreen() }
             composable(
                 route = "jobDetail/{jobId}",
@@ -94,7 +94,7 @@ fun BottomNavigationBar(navController: NavHostController) {
     val items = listOf(
         BottomNavItem("dashboard", "Dashboard", Icons.Default.Home),
         BottomNavItem("jobs", "Jobs", Icons.Default.Work),
-        BottomNavItem("resources", "Resources", Icons.Default.Build),
+        BottomNavItem("assets", "Assets", Icons.Default.Build),
         BottomNavItem("settings", "Settings", Icons.Default.Settings)
     )
 

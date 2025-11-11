@@ -14,26 +14,26 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import com.metroair.job_card_management.domain.model.Resource
+import com.metroair.job_card_management.domain.model.Asset
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddResourceDialog(
+fun AddAssetDialog(
     onDismiss: () -> Unit,
-    onResourceAdded: (String, String, Double) -> Unit, // itemName, itemCode, quantity
-    availableResources: List<Resource>
+    onAssetAdded: (String, String, Double) -> Unit, // itemName, itemCode, quantity
+    availableAssets: List<Asset>
 ) {
     var searchQuery by remember { mutableStateOf("") }
-    var selectedResource by remember { mutableStateOf<Resource?>(null) }
+    var selectedAsset by remember { mutableStateOf<Asset?>(null) }
     var quantity by remember { mutableStateOf("") }
     var showDropdown by remember { mutableStateOf(false) }
     var searchJob by remember { mutableStateOf<Job?>(null) }
 
-    // Filter resources based on search with debouncing
-    var filteredResources by remember { mutableStateOf(emptyList<Resource>()) }
+    // Filter assets based on search with debouncing
+    var filteredAssets by remember { mutableStateOf(emptyList<Asset>()) }
     val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(searchQuery) {
@@ -41,24 +41,24 @@ fun AddResourceDialog(
         if (searchQuery.isNotBlank()) {
             searchJob = coroutineScope.launch {
                 delay(300) // Debounce
-                filteredResources = availableResources
-                    .filter { resource ->
-                        resource.itemName.contains(searchQuery, ignoreCase = true) ||
-                        resource.itemCode.contains(searchQuery, ignoreCase = true) ||
-                        resource.category.contains(searchQuery, ignoreCase = true)
+                filteredAssets = availableAssets
+                    .filter { asset ->
+                        asset.itemName.contains(searchQuery, ignoreCase = true) ||
+                        asset.itemCode.contains(searchQuery, ignoreCase = true) ||
+                        asset.category.contains(searchQuery, ignoreCase = true)
                     }
                     .take(5)
-                showDropdown = filteredResources.isNotEmpty()
+                showDropdown = filteredAssets.isNotEmpty()
             }
         } else {
-            filteredResources = emptyList()
+            filteredAssets = emptyList()
             showDropdown = false
         }
     }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add Resource") },
+        title = { Text("Add Asset") },
         text = {
             Column(
                 modifier = Modifier
@@ -69,29 +69,29 @@ fun AddResourceDialog(
                 // Search field with dropdown
                 Column {
                     OutlinedTextField(
-                        value = if (selectedResource != null) {
-                            "${selectedResource!!.itemName} (${selectedResource!!.itemCode})"
+                        value = if (selectedAsset != null) {
+                            "${selectedAsset!!.itemName} (${selectedAsset!!.itemCode})"
                         } else {
                             searchQuery
                         },
                         onValueChange = { newValue ->
-                            if (selectedResource != null) {
-                                // If a resource was selected, clear it when typing
-                                selectedResource = null
+                            if (selectedAsset != null) {
+                                // If an asset was selected, clear it when typing
+                                selectedAsset = null
                             }
                             searchQuery = newValue
                         },
-                        label = { Text("Search Resource *") },
-                        placeholder = { Text("Type to search resources...") },
+                        label = { Text("Search Asset *") },
+                        placeholder = { Text("Type to search assets...") },
                         leadingIcon = {
                             Icon(Icons.Default.Search, contentDescription = null)
                         },
                         trailingIcon = {
-                            if (searchQuery.isNotEmpty() || selectedResource != null) {
+                            if (searchQuery.isNotEmpty() || selectedAsset != null) {
                                 IconButton(
                                     onClick = {
                                         searchQuery = ""
-                                        selectedResource = null
+                                        selectedAsset = null
                                     }
                                 ) {
                                     Icon(Icons.Default.Clear, contentDescription = "Clear")
@@ -101,7 +101,7 @@ fun AddResourceDialog(
                         modifier = Modifier
                             .fillMaxWidth()
                             .onFocusChanged { focusState ->
-                                if (focusState.isFocused && searchQuery.isNotBlank() && selectedResource == null) {
+                                if (focusState.isFocused && searchQuery.isNotBlank() && selectedAsset == null) {
                                     showDropdown = true
                                 }
                             },
@@ -109,7 +109,7 @@ fun AddResourceDialog(
                     )
 
                     // Dropdown with search results
-                    if (showDropdown && filteredResources.isNotEmpty()) {
+                    if (showDropdown && filteredAssets.isNotEmpty()) {
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -117,11 +117,11 @@ fun AddResourceDialog(
                             elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
                         ) {
                             LazyColumn {
-                                items(filteredResources) { resource ->
-                                    ResourceSearchItem(
-                                        resource = resource,
+                                items(filteredAssets) { asset ->
+                                    AssetSearchItem(
+                                        asset = asset,
                                         onClick = {
-                                            selectedResource = resource
+                                            selectedAsset = asset
                                             searchQuery = ""
                                             showDropdown = false
                                         }
@@ -132,8 +132,8 @@ fun AddResourceDialog(
                     }
                 }
 
-                // Selected resource info
-                if (selectedResource != null) {
+                // Selected asset info
+                if (selectedAsset != null) {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(
@@ -144,29 +144,29 @@ fun AddResourceDialog(
                             modifier = Modifier.padding(12.dp)
                         ) {
                             Text(
-                                text = "Selected Resource",
+                                text = "Selected Asset",
                                 style = MaterialTheme.typography.labelMedium
                             )
                             Text(
-                                text = selectedResource!!.itemName,
+                                text = selectedAsset!!.itemName,
                                 style = MaterialTheme.typography.titleSmall
                             )
                             Row(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Text(
-                                    text = "Code: ${selectedResource!!.itemCode}",
+                                    text = "Code: ${selectedAsset!!.itemCode}",
                                     style = MaterialTheme.typography.bodySmall
                                 )
                                 Text(
-                                    text = "• ${selectedResource!!.category}",
+                                    text = "• ${selectedAsset!!.category}",
                                     style = MaterialTheme.typography.bodySmall
                                 )
                             }
                             Text(
-                                text = "Stock: ${selectedResource!!.currentStock} ${selectedResource!!.unitOfMeasure}",
+                                text = "Stock: ${selectedAsset!!.currentStock} ${selectedAsset!!.unitOfMeasure}",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = if (selectedResource!!.isLowStock) {
+                                color = if (selectedAsset!!.isLowStock) {
                                     MaterialTheme.colorScheme.error
                                 } else {
                                     MaterialTheme.colorScheme.onPrimaryContainer
@@ -188,15 +188,15 @@ fun AddResourceDialog(
                     label = { Text("Quantity *") },
                     placeholder = { Text("Enter quantity") },
                     suffix = {
-                        Text(selectedResource?.unitOfMeasure ?: "")
+                        Text(selectedAsset?.unitOfMeasure ?: "")
                     },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = selectedResource != null,
+                    enabled = selectedAsset != null,
                     supportingText = {
-                        if (selectedResource != null) {
+                        if (selectedAsset != null) {
                             val qty = quantity.toDoubleOrNull() ?: 0.0
-                            val stock = selectedResource!!.currentStock
+                            val stock = selectedAsset!!.currentStock
                             if (qty > stock) {
                                 Text(
                                     text = "Quantity exceeds available stock",
@@ -208,7 +208,7 @@ fun AddResourceDialog(
                 )
 
                 // Quick quantity buttons
-                if (selectedResource != null) {
+                if (selectedAsset != null) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -228,24 +228,24 @@ fun AddResourceDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    selectedResource?.let { resource ->
+                    selectedAsset?.let { asset ->
                         quantity.toDoubleOrNull()?.let { qty ->
-                            if (qty > 0 && qty <= resource.currentStock) {
-                                onResourceAdded(
-                                    resource.itemName,
-                                    resource.itemCode,
+                            if (qty > 0 && qty <= asset.currentStock) {
+                                onAssetAdded(
+                                    asset.itemName,
+                                    asset.itemCode,
                                     qty
                                 )
                             }
                         }
                     }
                 },
-                enabled = selectedResource != null &&
-                         quantity.toDoubleOrNull()?.let { it > 0 && it <= (selectedResource?.currentStock ?: 0) } == true
+                enabled = selectedAsset != null &&
+                         quantity.toDoubleOrNull()?.let { it > 0 && it <= (selectedAsset?.currentStock ?: 0) } == true
             ) {
                 Icon(Icons.Default.Add, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Add Resource")
+                Text("Add Asset")
             }
         },
         dismissButton = {
@@ -257,8 +257,8 @@ fun AddResourceDialog(
 }
 
 @Composable
-private fun ResourceSearchItem(
-    resource: Resource,
+private fun AssetSearchItem(
+    asset: Asset,
     onClick: () -> Unit
 ) {
     Surface(
@@ -275,19 +275,19 @@ private fun ResourceSearchItem(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = resource.itemName,
+                    text = asset.itemName,
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = resource.itemCode,
+                        text = asset.itemCode,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "• ${resource.category}",
+                        text = "• ${asset.category}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -298,15 +298,15 @@ private fun ResourceSearchItem(
                 horizontalAlignment = Alignment.End
             ) {
                 Text(
-                    text = "${resource.currentStock} ${resource.unitOfMeasure}",
+                    text = "${asset.currentStock} ${asset.unitOfMeasure}",
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (resource.isLowStock) {
+                    color = if (asset.isLowStock) {
                         MaterialTheme.colorScheme.error
                     } else {
                         MaterialTheme.colorScheme.onSurfaceVariant
                     }
                 )
-                if (resource.isLowStock) {
+                if (asset.isLowStock) {
                     Text(
                         text = "Low Stock",
                         style = MaterialTheme.typography.labelSmall,

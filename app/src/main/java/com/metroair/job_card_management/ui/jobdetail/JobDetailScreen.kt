@@ -22,7 +22,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
-import com.metroair.job_card_management.ui.components.AddResourceDialog
+import com.metroair.job_card_management.ui.components.AddAssetDialog
 import com.metroair.job_card_management.ui.components.JobTimelineCard
 import com.metroair.job_card_management.ui.components.PhotoCaptureDialog
 import com.metroair.job_card_management.ui.components.PhotoCategory
@@ -40,7 +40,7 @@ fun JobDetailScreen(
     val context = LocalContext.current
     val jobCard by viewModel.jobCard.collectAsStateWithLifecycle()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val availableResources by viewModel.availableResources.collectAsStateWithLifecycle()
+    val availableAssets by viewModel.availableAssets.collectAsStateWithLifecycle()
     var showSignatureDialog by remember { mutableStateOf(false) }
     var showResourceDialog by remember { mutableStateOf(false) }
     var showPhotoDialog by remember { mutableStateOf(false) }
@@ -398,7 +398,7 @@ fun JobDetailScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "Resources Used",
+                                    text = "Job Materials",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -697,13 +697,13 @@ fun JobDetailScreen(
 
     // Add Resource Dialog
     if (showResourceDialog) {
-        AddResourceDialog(
+        AddAssetDialog(
             onDismiss = { showResourceDialog = false },
-            onResourceAdded = { itemName, itemCode, quantity ->
+            onAssetAdded = { itemName, itemCode, quantity ->
                 viewModel.addResource(itemName, itemCode, quantity)
                 showResourceDialog = false
             },
-            availableResources = availableResources
+            availableAssets = availableAssets
         )
     }
 

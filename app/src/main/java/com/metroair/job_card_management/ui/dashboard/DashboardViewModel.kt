@@ -4,7 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.metroair.job_card_management.data.local.database.dao.CurrentTechnicianDao
 import com.metroair.job_card_management.data.repository.JobCardRepository
-import com.metroair.job_card_management.data.repository.ResourceRepository
+import com.metroair.job_card_management.data.repository.AssetRepository
+import com.metroair.job_card_management.data.repository.FixedRepository
 import com.metroair.job_card_management.domain.model.DashboardStats
 import com.metroair.job_card_management.domain.model.JobCard
 import com.metroair.job_card_management.domain.model.JobStatus
@@ -17,7 +18,8 @@ import javax.inject.Inject
 class DashboardViewModel @Inject constructor(
     private val jobCardRepository: JobCardRepository,
     private val currentTechnicianDao: CurrentTechnicianDao,
-    private val resourceRepository: ResourceRepository
+    private val assetRepository: AssetRepository,
+    private val fixedRepository: FixedRepository
 ) : ViewModel() {
 
     private val _uiMessage = MutableStateFlow<String?>(null)
@@ -79,7 +81,7 @@ class DashboardViewModel @Inject constructor(
         )
 
     // Available resources for adding to jobs
-    val availableResources = resourceRepository.getAllResources()
+    val availableAssets = assetRepository.getAllAssets()
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -214,21 +216,21 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-    fun addResourceToJob(jobId: Int, itemName: String, itemCode: String, quantity: Double) {
+    fun addAssetToJob(jobId: Int, itemName: String, itemCode: String, quantity: Double) {
         viewModelScope.launch {
             try {
                 val job = jobCardRepository.getJobById(jobId)
-                val currentResourcesJson = job?.resourcesUsed ?: "[]"
+                val currentAssetsJson = job?.resourcesUsed ?: "[]"
 
                 // Find the resource details from available resources to get id and unit
-                val availableResource = availableResources.value.find { it.itemCode == itemCode }
-                if (availableResource == null) {
-                    _uiMessage.value = "Resource not found"
+                val availableAsset = availableAssets.value.find { it.itemCode == itemCode }
+                if (availableAsset == null) {
+                    _uiMessage.value = "Asset not found"
                     return@launch
                 }
 
                 // Parse existing resources
-                val resourcesArray = org.json.JSONArray(currentResourcesJson)
+                val resourcesArray = org.json.JSONArray(currentAssetsJson)
 
                 // Check if resource already exists
                 var found = false
@@ -245,19 +247,19 @@ class DashboardViewModel @Inject constructor(
 
                 // Add new resource if not found
                 if (!found) {
-                    val newResource = org.json.JSONObject()
-                    newResource.put("id", availableResource.id)
-                    newResource.put("name", itemName)
-                    newResource.put("code", itemCode)
-                    newResource.put("quantity", quantity)
-                    newResource.put("unit", availableResource.unitOfMeasure)
-                    resourcesArray.put(newResource)
+                    val newAsset = org.json.JSONObject()
+                    newAsset.put("id", availableAsset.id)
+                    newAsset.put("name", itemName)
+                    newAsset.put("code", itemCode)
+                    newAsset.put("quantity", quantity)
+                    newAsset.put("unit", availableAsset.unitOfMeasure)
+                    resourcesArray.put(newAsset)
                 }
 
                 // Update in repository
-                val success = jobCardRepository.updateJobResources(jobId, resourcesArray.toString())
+                val success = jobCardRepository.updateJobAssets(jobId, resourcesArray.toString())
                 if (success) {
-                    _uiMessage.value = "Resource added successfully"
+                    _uiMessage.value = "Asset added successfully"
                 } else {
                     _uiMessage.value = "Failed to add resource"
                 }

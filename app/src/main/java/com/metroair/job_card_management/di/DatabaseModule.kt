@@ -3,10 +3,10 @@ package com.metroair.job_card_management.di
 import android.content.Context
 import com.metroair.job_card_management.data.local.database.JobCardDatabase
 import com.metroair.job_card_management.data.local.database.dao.AssetDao
+import com.metroair.job_card_management.data.local.database.dao.FixedDao
 import com.metroair.job_card_management.data.local.database.dao.CurrentTechnicianDao
 import com.metroair.job_card_management.data.local.database.dao.CustomerDao
 import com.metroair.job_card_management.data.local.database.dao.JobCardDao
-import com.metroair.job_card_management.data.local.database.dao.ResourceDao
 import com.metroair.job_card_management.data.local.database.dao.ToolCheckoutDao
 import dagger.Module
 import dagger.Provides
@@ -32,14 +32,14 @@ object DatabaseModule {
     fun provideCustomerDao(database: JobCardDatabase): CustomerDao = database.customerDao()
 
     @Provides
-    fun provideResourceDao(database: JobCardDatabase): ResourceDao = database.resourceDao()
+    fun provideAssetDao(database: JobCardDatabase): AssetDao = database.assetDao()
+
+    @Provides
+    fun provideFixedDao(database: JobCardDatabase): FixedDao = database.fixedDao()
 
     @Provides
     fun provideCurrentTechnicianDao(database: JobCardDatabase): CurrentTechnicianDao = database.currentTechnicianDao()
 
     @Provides
     fun provideToolCheckoutDao(database: JobCardDatabase): ToolCheckoutDao = database.toolCheckoutDao()
-
-    @Provides
-    fun provideAssetDao(database: JobCardDatabase): AssetDao = database.assetDao()
 }

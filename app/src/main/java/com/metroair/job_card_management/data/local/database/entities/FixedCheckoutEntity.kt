@@ -6,26 +6,26 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 @Entity(
-    tableName = "asset_checkouts",
+    tableName = "fixed_checkouts",
     foreignKeys = [
         ForeignKey(
-            entity = AssetEntity::class,
+            entity = FixedEntity::class,
             parentColumns = ["id"],
-            childColumns = ["assetId"],
+            childColumns = ["fixedId"],
             onDelete = ForeignKey.CASCADE
         )
     ],
     indices = [
-        Index("assetId"),
+        Index("fixedId"),
         Index("technicianId"),
         Index("jobId")
     ]
 )
-data class AssetCheckoutEntity(
+data class FixedCheckoutEntity(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
-    val assetId: Int,
-    val assetCode: String,
-    val assetName: String,
+    val fixedId: Int,
+    val fixedCode: String,
+    val fixedName: String,
     val technicianId: Int,
     val technicianName: String,
     val checkoutTime: Long = System.currentTimeMillis(),

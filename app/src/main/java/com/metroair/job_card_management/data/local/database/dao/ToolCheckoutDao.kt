@@ -23,5 +23,5 @@ interface ToolCheckoutDao {
     fun getAllCheckoutsForTechnician(technicianId: Int): Flow<List<ToolCheckoutEntity>>
 
     @Query("SELECT * FROM tool_checkouts WHERE resourceId = :resourceId AND isReturned = 0")
-    suspend fun getActiveCheckoutsForResource(resourceId: Int): List<ToolCheckoutEntity>
+    suspend fun getActiveCheckoutsForAsset(resourceId: Int): List<ToolCheckoutEntity>
 }

@@ -1,4 +1,4 @@
-package com.metroair.job_card_management.ui.resources
+package com.metroair.job_card_management.ui.assets
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -15,30 +15,30 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.metroair.job_card_management.domain.model.Asset
-import com.metroair.job_card_management.domain.model.AssetType
-import com.metroair.job_card_management.domain.model.Resource
+import com.metroair.job_card_management.domain.model.Fixed
+import com.metroair.job_card_management.domain.model.FixedType
 
-enum class ResourceViewType {
-    ALL, INVENTORY, ASSETS
+enum class AssetViewType {
+    ALL, CURRENT, FIXED
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ResourcesScreen(
-    viewModel: ResourcesViewModel = hiltViewModel()
+fun AssetsScreen(
+    viewModel: AssetsViewModel = hiltViewModel()
 ) {
-    val resources by viewModel.filteredResources.collectAsStateWithLifecycle()
-    val assets by viewModel.filteredAssets.collectAsStateWithLifecycle()
+    val currentAssets by viewModel.filteredAssets.collectAsStateWithLifecycle()
+    val fixedAssets by viewModel.filteredFixed.collectAsStateWithLifecycle()
     val categories by viewModel.categories.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val selectedCategory by viewModel.selectedCategory.collectAsStateWithLifecycle()
     val viewType by viewModel.viewType.collectAsStateWithLifecycle()
-    val selectedAssetType by viewModel.selectedAssetType.collectAsStateWithLifecycle()
-    val lowStockResources = resources.filter { it.isLowStock }
+    val selectedFixedType by viewModel.selectedFixedType.collectAsStateWithLifecycle()
+    val lowStockAssets = currentAssets.filter { it.isLowStock }
 
-    var selectedAsset by remember { mutableStateOf<Asset?>(null) }
+    var selectedFixed by remember { mutableStateOf<Fixed?>(null) }
     var showCheckoutDialog by remember { mutableStateOf(false) }
-    var showAssetDetailsDialog by remember { mutableStateOf(false) }
+    var showFixedDetailsDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier.fillMaxSize()
@@ -53,9 +53,9 @@ fun ResourcesScreen(
             placeholder = {
                 Text(
                     when (viewType) {
-                        ResourceViewType.ASSETS -> "Search assets..."
-                        ResourceViewType.INVENTORY -> "Search inventory..."
-                        else -> "Search resources..."
+                        AssetViewType.FIXED -> "Search fixed assets..."
+                        AssetViewType.CURRENT -> "Search current items..."
+                        else -> "Search all..."
                     }
                 )
             },
@@ -71,7 +71,7 @@ fun ResourcesScreen(
             shape = MaterialTheme.shapes.large
         )
 
-        // View Type Filters (Inventory, Assets, All)
+        // View Type Filters (Current, Fixed, All)
         LazyRow(
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
@@ -79,20 +79,20 @@ fun ResourcesScreen(
         ) {
             item {
                 FilterChip(
-                    selected = viewType == ResourceViewType.ALL,
-                    onClick = { viewModel.setViewType(ResourceViewType.ALL) },
+                    selected = viewType == AssetViewType.ALL,
+                    onClick = { viewModel.setViewType(AssetViewType.ALL) },
                     label = { Text("All") },
-                    leadingIcon = if (viewType == ResourceViewType.ALL) {
+                    leadingIcon = if (viewType == AssetViewType.ALL) {
                         { Icon(Icons.Default.Check, contentDescription = null, Modifier.size(18.dp)) }
                     } else null
                 )
             }
             item {
                 FilterChip(
-                    selected = viewType == ResourceViewType.INVENTORY,
-                    onClick = { viewModel.setViewType(ResourceViewType.INVENTORY) },
-                    label = { Text("Inventory") },
-                    leadingIcon = if (viewType == ResourceViewType.INVENTORY) {
+                    selected = viewType == AssetViewType.CURRENT,
+                    onClick = { viewModel.setViewType(AssetViewType.CURRENT) },
+                    label = { Text("Current") },
+                    leadingIcon = if (viewType == AssetViewType.CURRENT) {
                         { Icon(Icons.Default.Inventory2, contentDescription = null, Modifier.size(18.dp)) }
                     } else null,
                     colors = FilterChipDefaults.filterChipColors(
@@ -102,10 +102,10 @@ fun ResourcesScreen(
             }
             item {
                 FilterChip(
-                    selected = viewType == ResourceViewType.ASSETS,
-                    onClick = { viewModel.setViewType(ResourceViewType.ASSETS) },
-                    label = { Text("Assets") },
-                    leadingIcon = if (viewType == ResourceViewType.ASSETS) {
+                    selected = viewType == AssetViewType.FIXED,
+                    onClick = { viewModel.setViewType(AssetViewType.FIXED) },
+                    label = { Text("Fixed") },
+                    leadingIcon = if (viewType == AssetViewType.FIXED) {
                         { Icon(Icons.Default.Build, contentDescription = null, Modifier.size(18.dp)) }
                     } else null,
                     colors = FilterChipDefaults.filterChipColors(
@@ -117,8 +117,8 @@ fun ResourcesScreen(
 
         // Category/Type Filter Chips
         when (viewType) {
-            ResourceViewType.ASSETS -> {
-                // Asset Type Filter
+            AssetViewType.FIXED -> {
+                // Fixed Type Filter
                 LazyRow(
                     modifier = Modifier.fillMaxWidth(),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
@@ -126,46 +126,46 @@ fun ResourcesScreen(
                 ) {
                     item {
                         FilterChip(
-                            selected = selectedAssetType == null,
-                            onClick = { viewModel.selectAssetType(null) },
+                            selected = selectedFixedType == null,
+                            onClick = { viewModel.selectFixedType(null) },
                             label = { Text("All Types") },
-                            leadingIcon = if (selectedAssetType == null) {
+                            leadingIcon = if (selectedFixedType == null) {
                                 { Icon(Icons.Default.Check, contentDescription = null, Modifier.size(18.dp)) }
                             } else null
                         )
                     }
                     item {
                         FilterChip(
-                            selected = selectedAssetType == AssetType.TOOL,
-                            onClick = { viewModel.selectAssetType(AssetType.TOOL) },
+                            selected = selectedFixedType == FixedType.TOOL,
+                            onClick = { viewModel.selectFixedType(FixedType.TOOL) },
                             label = { Text("Tools") }
                         )
                     }
                     item {
                         FilterChip(
-                            selected = selectedAssetType == AssetType.AIR_CONDITIONER,
-                            onClick = { viewModel.selectAssetType(AssetType.AIR_CONDITIONER) },
+                            selected = selectedFixedType == FixedType.AIR_CONDITIONER,
+                            onClick = { viewModel.selectFixedType(FixedType.AIR_CONDITIONER) },
                             label = { Text("Air Conditioners") }
                         )
                     }
                     item {
                         FilterChip(
-                            selected = selectedAssetType == AssetType.LADDER,
-                            onClick = { viewModel.selectAssetType(AssetType.LADDER) },
+                            selected = selectedFixedType == FixedType.LADDER,
+                            onClick = { viewModel.selectFixedType(FixedType.LADDER) },
                             label = { Text("Ladders") }
                         )
                     }
                     item {
                         FilterChip(
-                            selected = selectedAssetType == AssetType.EQUIPMENT,
-                            onClick = { viewModel.selectAssetType(AssetType.EQUIPMENT) },
+                            selected = selectedFixedType == FixedType.EQUIPMENT,
+                            onClick = { viewModel.selectFixedType(FixedType.EQUIPMENT) },
                             label = { Text("Equipment") }
                         )
                     }
                 }
             }
-            ResourceViewType.INVENTORY -> {
-                // Category Filter for Inventory
+            AssetViewType.CURRENT -> {
+                // Category Filter for Current Inventory
                 if (categories.isNotEmpty()) {
                     LazyRow(
                         modifier = Modifier.fillMaxWidth(),
@@ -197,12 +197,11 @@ fun ResourcesScreen(
             }
             else -> {
                 // Show both filters for ALL view
-                // You might want to show both asset types and resource categories here
             }
         }
 
-        // Low Stock Warning (only for inventory)
-        if (viewType != ResourceViewType.ASSETS && lowStockResources.isNotEmpty()) {
+        // Low Stock Warning (only for current inventory)
+        if (viewType != AssetViewType.FIXED && lowStockAssets.isNotEmpty()) {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -229,7 +228,7 @@ fun ResourcesScreen(
                             color = MaterialTheme.colorScheme.onErrorContainer
                         )
                         Text(
-                            text = "${lowStockResources.size} items below minimum stock",
+                            text = "${lowStockAssets.size} items below minimum stock",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onErrorContainer
                         )
@@ -240,9 +239,9 @@ fun ResourcesScreen(
 
         // Main Content
         when (viewType) {
-            ResourceViewType.ASSETS -> {
-                // Assets List
-                if (assets.isEmpty()) {
+            AssetViewType.FIXED -> {
+                // Fixed Assets List
+                if (fixedAssets.isEmpty()) {
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
@@ -258,7 +257,7 @@ fun ResourcesScreen(
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
-                                text = "No assets found",
+                                text = "No fixed assets found",
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -270,25 +269,25 @@ fun ResourcesScreen(
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(assets) { asset ->
-                            AssetItem(
-                                asset = asset,
+                        items(fixedAssets) { fixed ->
+                            FixedCard(
+                                fixed = fixed,
                                 onCheckout = {
-                                    selectedAsset = asset
+                                    selectedFixed = fixed
                                     showCheckoutDialog = true
                                 },
                                 onViewDetails = {
-                                    selectedAsset = asset
-                                    showAssetDetailsDialog = true
+                                    selectedFixed = fixed
+                                    showFixedDetailsDialog = true
                                 }
                             )
                         }
                     }
                 }
             }
-            ResourceViewType.INVENTORY -> {
-                // Inventory List
-                if (resources.isEmpty()) {
+            AssetViewType.CURRENT -> {
+                // Current Inventory List
+                if (currentAssets.isEmpty()) {
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
@@ -304,7 +303,7 @@ fun ResourcesScreen(
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
-                                text = "No inventory items found",
+                                text = "No current items found",
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -317,16 +316,16 @@ fun ResourcesScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         if (selectedCategory != null || searchQuery.isNotEmpty()) {
-                            items(resources) { resource ->
-                                ResourceItem(
-                                    resource = resource,
-                                    onCheckoutTool = { viewModel.checkoutTool(resource.id, resource.itemName, resource.itemCode) },
-                                    onUseResource = { quantity -> viewModel.useResource(resource.id, quantity) }
+                            items(currentAssets) { asset ->
+                                AssetCard(
+                                    asset = asset,
+                                    onCheckoutTool = { viewModel.checkoutAsset(asset.id, asset.itemName, asset.itemCode) },
+                                    onUseAsset = { quantity -> viewModel.useAsset(asset.id, quantity) }
                                 )
                             }
                         } else {
-                            val groupedResources = resources.groupBy { it.category }
-                            groupedResources.forEach { (category, categoryResources) ->
+                            val groupedAssets = currentAssets.groupBy { it.category }
+                            groupedAssets.forEach { (category, categoryAssets) ->
                                 item {
                                     Text(
                                         text = category,
@@ -335,11 +334,11 @@ fun ResourcesScreen(
                                         modifier = Modifier.padding(vertical = 8.dp)
                                     )
                                 }
-                                items(categoryResources) { resource ->
-                                    ResourceItem(
-                                        resource = resource,
-                                        onCheckoutTool = { viewModel.checkoutTool(resource.id, resource.itemName, resource.itemCode) },
-                                        onUseResource = { quantity -> viewModel.useResource(resource.id, quantity) }
+                                items(categoryAssets) { asset ->
+                                    AssetCard(
+                                        asset = asset,
+                                        onCheckoutTool = { viewModel.checkoutAsset(asset.id, asset.itemName, asset.itemCode) },
+                                        onUseAsset = { quantity -> viewModel.useAsset(asset.id, quantity) }
                                     )
                                 }
                             }
@@ -347,51 +346,51 @@ fun ResourcesScreen(
                     }
                 }
             }
-            ResourceViewType.ALL -> {
-                // Combined view - show both assets and resources
+            AssetViewType.ALL -> {
+                // Combined view - show both fixed assets and current inventory
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    if (assets.isNotEmpty()) {
+                    if (fixedAssets.isNotEmpty()) {
                         item {
                             Text(
-                                text = "Assets",
+                                text = "Fixed",
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(vertical = 8.dp)
                             )
                         }
-                        items(assets.take(5)) { asset ->
-                            AssetItem(
-                                asset = asset,
+                        items(fixedAssets.take(5)) { fixed ->
+                            FixedCard(
+                                fixed = fixed,
                                 onCheckout = {
-                                    selectedAsset = asset
+                                    selectedFixed = fixed
                                     showCheckoutDialog = true
                                 },
                                 onViewDetails = {
-                                    selectedAsset = asset
-                                    showAssetDetailsDialog = true
+                                    selectedFixed = fixed
+                                    showFixedDetailsDialog = true
                                 }
                             )
                         }
                     }
 
-                    if (resources.isNotEmpty()) {
+                    if (currentAssets.isNotEmpty()) {
                         item {
                             Text(
-                                text = "Inventory",
+                                text = "Current",
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(vertical = 8.dp)
                             )
                         }
-                        items(resources.take(10)) { resource ->
-                            ResourceItem(
-                                resource = resource,
-                                onCheckoutTool = { viewModel.checkoutTool(resource.id, resource.itemName, resource.itemCode) },
-                                onUseResource = { quantity -> viewModel.useResource(resource.id, quantity) }
+                        items(currentAssets.take(10)) { asset ->
+                            AssetCard(
+                                asset = asset,
+                                onCheckoutTool = { viewModel.checkoutAsset(asset.id, asset.itemName, asset.itemCode) },
+                                onUseAsset = { quantity -> viewModel.useAsset(asset.id, quantity) }
                             )
                         }
                     }
@@ -400,30 +399,30 @@ fun ResourcesScreen(
         }
     }
 
-    // Asset Checkout Dialog
-    if (showCheckoutDialog && selectedAsset != null) {
-        AssetCheckoutDialog(
-            asset = selectedAsset!!,
+    // Fixed Checkout Dialog
+    if (showCheckoutDialog && selectedFixed != null) {
+        FixedCheckoutDialog(
+            fixed = selectedFixed!!,
             onDismiss = {
                 showCheckoutDialog = false
-                selectedAsset = null
+                selectedFixed = null
             },
             onConfirm = { reason, jobId, condition, notes ->
-                viewModel.checkoutAsset(selectedAsset!!.id, reason, jobId, condition, notes)
+                viewModel.checkoutFixed(selectedFixed!!.id, reason, jobId, condition, notes)
                 showCheckoutDialog = false
-                selectedAsset = null
+                selectedFixed = null
             }
         )
     }
 
-    // Asset Details Dialog
-    if (showAssetDetailsDialog && selectedAsset != null) {
-        AssetDetailsDialog(
-            asset = selectedAsset!!,
+    // Fixed Details Dialog
+    if (showFixedDetailsDialog && selectedFixed != null) {
+        FixedDetailsDialog(
+            fixed = selectedFixed!!,
             viewModel = viewModel,
             onDismiss = {
-                showAssetDetailsDialog = false
-                selectedAsset = null
+                showFixedDetailsDialog = false
+                selectedFixed = null
             }
         )
     }
@@ -431,10 +430,10 @@ fun ResourcesScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ResourceItem(
-    resource: Resource,
+fun AssetCard(
+    asset: Asset,
     onCheckoutTool: () -> Unit,
-    onUseResource: (Int) -> Unit
+    onUseAsset: (Int) -> Unit
 ) {
     var showUseDialog by remember { mutableStateOf(false) }
 
@@ -452,7 +451,7 @@ fun ResourceItem(
                 verticalAlignment = Alignment.Top
             ) {
                 Text(
-                    text = resource.itemName,
+                    text = asset.itemName,
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f)
                 )
@@ -462,7 +461,7 @@ fun ResourceItem(
                     onClick = { },
                     label = {
                         Text(
-                            resource.category,
+                            asset.category,
                             style = MaterialTheme.typography.labelSmall
                         )
                     },
@@ -475,7 +474,7 @@ fun ResourceItem(
 
             // Item code
             Text(
-                text = "Code: ${resource.itemCode}",
+                text = "Code: ${asset.itemCode}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -495,7 +494,7 @@ fun ResourceItem(
                     AssistChip(
                         onClick = { },
                         label = {
-                            Text("${resource.currentStock} ${resource.unitOfMeasure}")
+                            Text("${asset.currentStock} ${asset.unitOfMeasure}")
                         },
                         leadingIcon = {
                             Icon(
@@ -504,7 +503,7 @@ fun ResourceItem(
                                 modifier = Modifier.size(16.dp)
                             )
                         },
-                        colors = if (resource.isLowStock) {
+                        colors = if (asset.isLowStock) {
                             AssistChipDefaults.assistChipColors(
                                 containerColor = MaterialTheme.colorScheme.errorContainer
                             )
@@ -513,7 +512,7 @@ fun ResourceItem(
                         }
                     )
 
-                    if (resource.isLowStock) {
+                    if (asset.isLowStock) {
                         AssistChip(
                             onClick = { },
                             label = { Text("Low Stock") },
@@ -537,7 +536,7 @@ fun ResourceItem(
                 ) {
                     Icon(
                         Icons.Default.RemoveCircle,
-                        contentDescription = "Use Resource",
+                        contentDescription = "Use Asset",
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
@@ -545,13 +544,13 @@ fun ResourceItem(
         }
     }
 
-    // Use Resource Dialog
+    // Use Asset Dialog
     if (showUseDialog) {
-        UseResourceDialog(
-            resource = resource,
+        UseAssetDialog(
+            asset = asset,
             onDismiss = { showUseDialog = false },
             onConfirm = { quantity ->
-                onUseResource(quantity)
+                onUseAsset(quantity)
                 showUseDialog = false
             }
         )
@@ -560,8 +559,8 @@ fun ResourceItem(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun UseResourceDialog(
-    resource: Resource,
+fun UseAssetDialog(
+    asset: Asset,
     onDismiss: () -> Unit,
     onConfirm: (Int) -> Unit
 ) {
@@ -569,10 +568,10 @@ fun UseResourceDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Use ${resource.itemName}") },
+        title = { Text("Use ${asset.itemName}") },
         text = {
             Column {
-                Text("Current Stock: ${resource.currentStock} ${resource.unitOfMeasure}")
+                Text("Current Stock: ${asset.currentStock} ${asset.unitOfMeasure}")
                 Spacer(modifier = Modifier.height(16.dp))
                 OutlinedTextField(
                     value = quantity,
@@ -582,7 +581,7 @@ fun UseResourceDialog(
                         }
                     },
                     label = { Text("Quantity to Use") },
-                    suffix = { Text(resource.unitOfMeasure) },
+                    suffix = { Text(asset.unitOfMeasure) },
                     singleLine = true
                 )
             }
@@ -591,13 +590,13 @@ fun UseResourceDialog(
             TextButton(
                 onClick = {
                     val qty = quantity.toIntOrNull() ?: 0
-                    if (qty > 0 && qty <= resource.currentStock) {
+                    if (qty > 0 && qty <= asset.currentStock) {
                         onConfirm(qty)
                     }
                 },
                 enabled = quantity.isNotEmpty() &&
                          (quantity.toIntOrNull() ?: 0) > 0 &&
-                         (quantity.toIntOrNull() ?: 0) <= resource.currentStock
+                         (quantity.toIntOrNull() ?: 0) <= asset.currentStock
             ) {
                 Text("Use")
             }
@@ -612,8 +611,8 @@ fun UseResourceDialog(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AssetItem(
-    asset: Asset,
+fun FixedCard(
+    fixed: Fixed,
     onCheckout: () -> Unit,
     onViewDetails: () -> Unit
 ) {
@@ -633,7 +632,7 @@ fun AssetItem(
                     verticalAlignment = Alignment.Top
                 ) {
                     Text(
-                        text = asset.assetName,
+                        text = fixed.fixedName,
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.weight(1f)
                     )
@@ -643,14 +642,14 @@ fun AssetItem(
                         onClick = { },
                         label = {
                             Text(
-                                when(asset.assetType) {
-                                    AssetType.AIR_CONDITIONER -> "Air Conditioner"
-                                    AssetType.TOOL -> "Tool"
-                                    AssetType.LADDER -> "Ladder"
-                                    AssetType.EQUIPMENT -> "Equipment"
-                                    AssetType.VEHICLE -> "Vehicle"
-                                    AssetType.METER -> "Meter"
-                                    AssetType.PUMP -> "Pump"
+                                when(fixed.fixedType) {
+                                    FixedType.AIR_CONDITIONER -> "Air Conditioner"
+                                    FixedType.TOOL -> "Tool"
+                                    FixedType.LADDER -> "Ladder"
+                                    FixedType.EQUIPMENT -> "Equipment"
+                                    FixedType.VEHICLE -> "Vehicle"
+                                    FixedType.METER -> "Meter"
+                                    FixedType.PUMP -> "Pump"
                                 },
                                 style = MaterialTheme.typography.labelSmall
                             )
@@ -658,10 +657,10 @@ fun AssetItem(
                         modifier = Modifier.height(24.dp),
                         leadingIcon = {
                             Icon(
-                                when(asset.assetType) {
-                                    AssetType.AIR_CONDITIONER -> Icons.Default.AcUnit
-                                    AssetType.TOOL -> Icons.Default.Build
-                                    AssetType.LADDER -> Icons.Default.Stairs
+                                when(fixed.fixedType) {
+                                    FixedType.AIR_CONDITIONER -> Icons.Default.AcUnit
+                                    FixedType.TOOL -> Icons.Default.Build
+                                    FixedType.LADDER -> Icons.Default.Stairs
                                     else -> Icons.Default.Hardware
                                 },
                                 contentDescription = null,
@@ -676,13 +675,13 @@ fun AssetItem(
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text(
-                        text = "Code: ${asset.assetCode}",
+                        text = "Code: ${fixed.fixedCode}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    if (asset.serialNumber != null) {
+                    if (fixed.serialNumber != null) {
                         Text(
-                            text = "• SN: ${asset.serialNumber}",
+                            text = "• SN: ${fixed.serialNumber}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -690,7 +689,7 @@ fun AssetItem(
                 }
 
                 // Show checked out info if not available
-                if (!asset.isAvailable && asset.currentHolder != null) {
+                if (!fixed.isAvailable && fixed.currentHolder != null) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -698,7 +697,7 @@ fun AssetItem(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Checked out by: ${asset.currentHolder}",
+                            text = "Checked out by: ${fixed.currentHolder}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.error,
                             modifier = Modifier.weight(1f)
@@ -716,7 +715,7 @@ fun AssetItem(
             }
 
             // Full width checkout button at the bottom (only if available)
-            if (asset.isAvailable) {
+            if (fixed.isAvailable) {
                 FilledTonalButton(
                     onClick = onCheckout,
                     modifier = Modifier

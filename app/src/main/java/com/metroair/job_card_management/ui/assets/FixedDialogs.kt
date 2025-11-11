@@ -1,4 +1,4 @@
-package com.metroair.job_card_management.ui.resources
+package com.metroair.job_card_management.ui.assets
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -13,15 +13,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.metroair.job_card_management.domain.model.Asset
-import com.metroair.job_card_management.domain.model.AssetCheckout
+import com.metroair.job_card_management.domain.model.Fixed
+import com.metroair.job_card_management.domain.model.FixedCheckout
 import java.text.SimpleDateFormat
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AssetCheckoutDialog(
-    asset: Asset,
+fun FixedCheckoutDialog(
+    fixed: Fixed,
     onDismiss: () -> Unit,
     onConfirm: (reason: String, jobId: Int?, condition: String, notes: String?) -> Unit
 ) {
@@ -35,9 +35,9 @@ fun AssetCheckoutDialog(
         onDismissRequest = onDismiss,
         title = {
             Column {
-                Text("Checkout Asset")
+                Text("Checkout Fixed Asset")
                 Text(
-                    text = asset.assetName,
+                    text = fixed.fixedName,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -113,7 +113,7 @@ fun AssetCheckoutDialog(
                     maxLines = 4
                 )
 
-                // Asset Info
+                // Fixed Asset Info
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
@@ -124,18 +124,18 @@ fun AssetCheckoutDialog(
                         modifier = Modifier.padding(12.dp)
                     ) {
                         Text(
-                            text = "Asset Information",
+                            text = "Fixed Asset Information",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Code: ${asset.assetCode}",
+                            text = "Code: ${fixed.fixedCode}",
                             style = MaterialTheme.typography.bodySmall
                         )
-                        if (asset.serialNumber != null) {
+                        if (fixed.serialNumber != null) {
                             Text(
-                                text = "Serial: ${asset.serialNumber}",
+                                text = "Serial: ${fixed.serialNumber}",
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }
@@ -171,12 +171,12 @@ fun AssetCheckoutDialog(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AssetDetailsDialog(
-    asset: Asset,
-    viewModel: ResourcesViewModel,
+fun FixedDetailsDialog(
+    fixed: Fixed,
+    viewModel: AssetsViewModel,
     onDismiss: () -> Unit
 ) {
-    val assetHistory by viewModel.getAssetHistory(asset.id).collectAsStateWithLifecycle(emptyList())
+    val fixedHistory by viewModel.getFixedHistory(fixed.id).collectAsStateWithLifecycle(emptyList())
     val dateFormatter = SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault())
 
     AlertDialog(
@@ -184,14 +184,14 @@ fun AssetDetailsDialog(
         modifier = Modifier.fillMaxWidth(0.9f),
         title = {
             Column {
-                Text("Asset Details")
+                Text("Fixed Asset Details")
                 AssistChip(
                     onClick = { },
                     label = {
-                        Text(if (asset.isAvailable) "Available" else "In Use")
+                        Text(if (fixed.isAvailable) "Available" else "In Use")
                     },
                     colors = AssistChipDefaults.assistChipColors(
-                        containerColor = if (asset.isAvailable) {
+                        containerColor = if (fixed.isAvailable) {
                             MaterialTheme.colorScheme.tertiaryContainer
                         } else {
                             MaterialTheme.colorScheme.errorContainer
@@ -206,7 +206,7 @@ fun AssetDetailsDialog(
                     .fillMaxWidth()
                     .heightIn(max = 400.dp)
             ) {
-                // Asset Information
+                // Fixed Asset Information
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
@@ -217,26 +217,26 @@ fun AssetDetailsDialog(
                         modifier = Modifier.padding(12.dp)
                     ) {
                         Text(
-                            text = asset.assetName,
+                            text = fixed.fixedName,
                             style = MaterialTheme.typography.titleMedium
                         )
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        LabeledText("Asset Code", asset.assetCode)
-                        asset.serialNumber?.let { LabeledText("Serial Number", it) }
-                        asset.manufacturer?.let { LabeledText("Manufacturer", it) }
-                        asset.model?.let { LabeledText("Model", it) }
+                        LabeledText("Fixed Code", fixed.fixedCode)
+                        fixed.serialNumber?.let { LabeledText("Serial Number", it) }
+                        fixed.manufacturer?.let { LabeledText("Manufacturer", it) }
+                        fixed.model?.let { LabeledText("Model", it) }
 
-                        if (!asset.isAvailable && asset.currentHolder != null) {
+                        if (!fixed.isAvailable && fixed.currentHolder != null) {
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "Currently with: ${asset.currentHolder}",
+                                text = "Currently with: ${fixed.currentHolder}",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.error
                             )
                         }
 
-                        asset.notes?.let {
+                        fixed.notes?.let {
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
                                 text = "Notes: $it",
@@ -257,7 +257,7 @@ fun AssetDetailsDialog(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                if (assetHistory.isEmpty()) {
+                if (fixedHistory.isEmpty()) {
                     Card(
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -273,8 +273,8 @@ fun AssetDetailsDialog(
                         modifier = Modifier.weight(1f),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(assetHistory) { checkout ->
-                            AssetHistoryItem(checkout, dateFormatter)
+                        items(fixedHistory) { checkout ->
+                            FixedHistoryItem(checkout, dateFormatter)
                         }
                     }
                 }
@@ -289,8 +289,8 @@ fun AssetDetailsDialog(
 }
 
 @Composable
-private fun AssetHistoryItem(
-    checkout: AssetCheckout,
+private fun FixedHistoryItem(
+    checkout: FixedCheckout,
     dateFormatter: SimpleDateFormat
 ) {
     Card(

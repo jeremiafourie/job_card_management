@@ -7,17 +7,17 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.metroair.job_card_management.data.local.database.dao.AssetDao
+import com.metroair.job_card_management.data.local.database.dao.FixedDao
 import com.metroair.job_card_management.data.local.database.dao.CurrentTechnicianDao
 import com.metroair.job_card_management.data.local.database.dao.CustomerDao
 import com.metroair.job_card_management.data.local.database.dao.JobCardDao
-import com.metroair.job_card_management.data.local.database.dao.ResourceDao
 import com.metroair.job_card_management.data.local.database.dao.ToolCheckoutDao
 import com.metroair.job_card_management.data.local.database.entities.AssetEntity
-import com.metroair.job_card_management.data.local.database.entities.AssetCheckoutEntity
+import com.metroair.job_card_management.data.local.database.entities.FixedEntity
+import com.metroair.job_card_management.data.local.database.entities.FixedCheckoutEntity
 import com.metroair.job_card_management.data.local.database.entities.CurrentTechnicianEntity
 import com.metroair.job_card_management.data.local.database.entities.CustomerEntity
 import com.metroair.job_card_management.data.local.database.entities.JobCardEntity
-import com.metroair.job_card_management.data.local.database.entities.ResourceEntity
 import com.metroair.job_card_management.data.local.database.entities.ToolCheckoutEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -28,13 +28,13 @@ import java.time.LocalDate
     entities = [
         JobCardEntity::class,
         CustomerEntity::class,
-        ResourceEntity::class,
+        AssetEntity::class,
         CurrentTechnicianEntity::class,
         ToolCheckoutEntity::class,
-        AssetEntity::class,
-        AssetCheckoutEntity::class
+        FixedEntity::class,
+        FixedCheckoutEntity::class
     ],
-    version = 11, // Added Asset management entities
+    version = 11, // Added Asset and Fixed management entities
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -42,10 +42,10 @@ abstract class JobCardDatabase : RoomDatabase() {
 
     abstract fun jobCardDao(): JobCardDao
     abstract fun customerDao(): CustomerDao
-    abstract fun resourceDao(): ResourceDao
+    abstract fun assetDao(): AssetDao
+    abstract fun fixedDao(): FixedDao
     abstract fun currentTechnicianDao(): CurrentTechnicianDao
     abstract fun toolCheckoutDao(): ToolCheckoutDao
-    abstract fun assetDao(): AssetDao
 
     companion object {
         @Volatile
@@ -322,9 +322,9 @@ abstract class JobCardDatabase : RoomDatabase() {
                 )
             )
 
-            // Sample resources/inventory
-            val resources = listOf(
-                ResourceEntity(
+            // Sample assets/current inventory
+            val assets = listOf(
+                AssetEntity(
                     id = 1,
                     itemCode = "GAS-R410A",
                     itemName = "R410A Refrigerant Gas",
@@ -333,7 +333,7 @@ abstract class JobCardDatabase : RoomDatabase() {
                     minimumStock = 5,
                     unitOfMeasure = "kg"
                 ),
-                ResourceEntity(
+                AssetEntity(
                     id = 2,
                     itemCode = "FILTER-UNI",
                     itemName = "Universal AC Filter",
@@ -342,7 +342,7 @@ abstract class JobCardDatabase : RoomDatabase() {
                     minimumStock = 10,
                     unitOfMeasure = "piece"
                 ),
-                ResourceEntity(
+                AssetEntity(
                     id = 3,
                     itemCode = "PIPE-COPPER-15",
                     itemName = "Copper Pipe 15mm",
@@ -351,7 +351,7 @@ abstract class JobCardDatabase : RoomDatabase() {
                     minimumStock = 20,
                     unitOfMeasure = "meter"
                 ),
-                ResourceEntity(
+                AssetEntity(
                     id = 4,
                     itemCode = "BRACKET-WALL",
                     itemName = "Wall Mounting Bracket",
@@ -360,7 +360,7 @@ abstract class JobCardDatabase : RoomDatabase() {
                     minimumStock = 5,
                     unitOfMeasure = "set"
                 ),
-                ResourceEntity(
+                AssetEntity(
                     id = 5,
                     itemCode = "CAPACITOR-35UF",
                     itemName = "Capacitor 35uF",
@@ -369,7 +369,7 @@ abstract class JobCardDatabase : RoomDatabase() {
                     minimumStock = 5,
                     unitOfMeasure = "piece"
                 ),
-                ResourceEntity(
+                AssetEntity(
                     id = 6,
                     itemCode = "TOOL-GAUGE",
                     itemName = "Manifold Gauge Set",
@@ -378,7 +378,7 @@ abstract class JobCardDatabase : RoomDatabase() {
                     minimumStock = 2,
                     unitOfMeasure = "set"
                 ),
-                ResourceEntity(
+                AssetEntity(
                     id = 7,
                     itemCode = "CLEANER-COIL",
                     itemName = "Coil Cleaning Solution",
@@ -387,7 +387,7 @@ abstract class JobCardDatabase : RoomDatabase() {
                     minimumStock = 3,
                     unitOfMeasure = "bottle"
                 ),
-                ResourceEntity(
+                AssetEntity(
                     id = 8,
                     itemCode = "TAPE-INSUL",
                     itemName = "Insulation Tape",
@@ -398,95 +398,95 @@ abstract class JobCardDatabase : RoomDatabase() {
                 )
             )
 
-            // Sample assets
-            val assets = listOf(
-                AssetEntity(
-                    assetCode = "TOOL-001",
-                    assetName = "Digital Manifold Gauge Set",
-                    assetType = "TOOL",
+            // Sample fixed assets
+            val fixedAssets = listOf(
+                FixedEntity(
+                    fixedCode = "TOOL-001",
+                    fixedName = "Digital Manifold Gauge Set",
+                    fixedType = "TOOL",
                     serialNumber = "MG-2024-001",
                     manufacturer = "Fieldpiece",
                     model = "SM480V",
                     isAvailable = true
                 ),
-                AssetEntity(
-                    assetCode = "TOOL-002",
-                    assetName = "Recovery Machine",
-                    assetType = "TOOL",
+                FixedEntity(
+                    fixedCode = "TOOL-002",
+                    fixedName = "Recovery Machine",
+                    fixedType = "TOOL",
                     serialNumber = "RM-2024-002",
                     manufacturer = "Inficon",
                     model = "G5Twin",
                     isAvailable = true
                 ),
-                AssetEntity(
-                    assetCode = "AC-001",
-                    assetName = "Portable AC Unit - 12000 BTU",
-                    assetType = "AIR_CONDITIONER",
+                FixedEntity(
+                    fixedCode = "AC-001",
+                    fixedName = "Portable AC Unit - 12000 BTU",
+                    fixedType = "AIR_CONDITIONER",
                     serialNumber = "PAC-2024-001",
                     manufacturer = "LG",
                     model = "LP1217GSR",
                     isAvailable = true,
                     notes = "For temporary customer use"
                 ),
-                AssetEntity(
-                    assetCode = "AC-002",
-                    assetName = "Portable AC Unit - 18000 BTU",
-                    assetType = "AIR_CONDITIONER",
+                FixedEntity(
+                    fixedCode = "AC-002",
+                    fixedName = "Portable AC Unit - 18000 BTU",
+                    fixedType = "AIR_CONDITIONER",
                     serialNumber = "PAC-2024-002",
                     manufacturer = "Samsung",
                     model = "AX3000",
                     isAvailable = false,
                     currentHolder = "John Technician"
                 ),
-                AssetEntity(
-                    assetCode = "LADDER-001",
-                    assetName = "Extension Ladder - 24ft",
-                    assetType = "LADDER",
+                FixedEntity(
+                    fixedCode = "LADDER-001",
+                    fixedName = "Extension Ladder - 24ft",
+                    fixedType = "LADDER",
                     serialNumber = "LAD-2024-001",
                     manufacturer = "Werner",
                     model = "D1224-2",
                     isAvailable = true
                 ),
-                AssetEntity(
-                    assetCode = "LADDER-002",
-                    assetName = "Step Ladder - 8ft",
-                    assetType = "LADDER",
+                FixedEntity(
+                    fixedCode = "LADDER-002",
+                    fixedName = "Step Ladder - 8ft",
+                    fixedType = "LADDER",
                     serialNumber = "LAD-2024-002",
                     manufacturer = "Werner",
                     model = "FS108",
                     isAvailable = true
                 ),
-                AssetEntity(
-                    assetCode = "TOOL-003",
-                    assetName = "Vacuum Pump",
-                    assetType = "PUMP",
+                FixedEntity(
+                    fixedCode = "TOOL-003",
+                    fixedName = "Vacuum Pump",
+                    fixedType = "PUMP",
                     serialNumber = "VP-2024-001",
                     manufacturer = "Yellow Jacket",
                     model = "93600",
                     isAvailable = true
                 ),
-                AssetEntity(
-                    assetCode = "METER-001",
-                    assetName = "Digital Multimeter",
-                    assetType = "METER",
+                FixedEntity(
+                    fixedCode = "METER-001",
+                    fixedName = "Digital Multimeter",
+                    fixedType = "METER",
                     serialNumber = "DM-2024-001",
                     manufacturer = "Fluke",
                     model = "87V",
                     isAvailable = true
                 ),
-                AssetEntity(
-                    assetCode = "TOOL-004",
-                    assetName = "Refrigerant Leak Detector",
-                    assetType = "TOOL",
+                FixedEntity(
+                    fixedCode = "TOOL-004",
+                    fixedName = "Refrigerant Leak Detector",
+                    fixedType = "TOOL",
                     serialNumber = "LD-2024-001",
                     manufacturer = "Inficon",
                     model = "D-TEK 3",
                     isAvailable = true
                 ),
-                AssetEntity(
-                    assetCode = "EQUIP-001",
-                    assetName = "Refrigerant Recovery Tank",
-                    assetType = "EQUIPMENT",
+                FixedEntity(
+                    fixedCode = "EQUIP-001",
+                    fixedName = "Refrigerant Recovery Tank",
+                    fixedType = "EQUIPMENT",
                     serialNumber = "RT-2024-001",
                     manufacturer = "Mastercool",
                     model = "62010",
@@ -499,8 +499,8 @@ abstract class JobCardDatabase : RoomDatabase() {
             database.currentTechnicianDao().setCurrentTechnician(currentTechnician)
             database.customerDao().insertAllCustomers(customers)
             database.jobCardDao().insertJobs(jobCards)
-            database.resourceDao().insertAllResources(resources)
-            database.assetDao().insertAssets(assets)
+            database.assetDao().insertAllAssets(assets)
+            database.fixedDao().insertFixedFixeds(fixedAssets)
 
             // Set current active job ID for the technician
             database.currentTechnicianDao().setCurrentActiveJob(1001)

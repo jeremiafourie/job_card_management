@@ -21,7 +21,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.metroair.job_card_management.domain.model.JobCard
 import com.metroair.job_card_management.domain.model.JobStatus
-import com.metroair.job_card_management.ui.components.AddResourceDialog
+import com.metroair.job_card_management.ui.components.AddAssetDialog
 import com.metroair.job_card_management.ui.components.PhotoCaptureDialog
 import com.metroair.job_card_management.ui.components.PhotoCategory
 import com.metroair.job_card_management.ui.components.createImageFile
@@ -37,12 +37,12 @@ fun DashboardScreen(
     val pendingJobs by viewModel.pendingJobs.collectAsStateWithLifecycle()
     val stats by viewModel.stats.collectAsStateWithLifecycle()
     val uiMessage by viewModel.uiMessage.collectAsStateWithLifecycle()
-    val availableResources by viewModel.availableResources.collectAsStateWithLifecycle()
+    val availableAssets by viewModel.availableAssets.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     var showPhotoDialog by remember { mutableStateOf(false) }
-    var showResourceDialog by remember { mutableStateOf(false) }
+    var showAssetDialog by remember { mutableStateOf(false) }
     var currentPhotoUri by remember { mutableStateOf<Uri?>(null) }
     var currentJobForPhoto by remember { mutableStateOf<JobCard?>(null) }
 
@@ -128,9 +128,9 @@ fun DashboardScreen(
                         currentPhotoUri = uri
                         showPhotoDialog = true
                     },
-                    onResourceClick = {
+                    onAssetClick = {
                         currentJobForPhoto = job
-                        showResourceDialog = true
+                        showAssetDialog = true
                     }
                 )
             } ?: NoActiveJobCard()
@@ -213,19 +213,19 @@ fun DashboardScreen(
         )
     }
 
-    // Add Resource Dialog
-    if (showResourceDialog && currentJobForPhoto != null) {
-        AddResourceDialog(
+    // Add Asset Dialog
+    if (showAssetDialog && currentJobForPhoto != null) {
+        AddAssetDialog(
             onDismiss = {
-                showResourceDialog = false
+                showAssetDialog = false
                 currentJobForPhoto = null
             },
-            onResourceAdded = { itemName, itemCode, quantity ->
-                viewModel.addResourceToJob(currentJobForPhoto!!.id, itemName, itemCode, quantity)
-                showResourceDialog = false
+            onAssetAdded = { itemName, itemCode, quantity ->
+                viewModel.addAssetToJob(currentJobForPhoto!!.id, itemName, itemCode, quantity)
+                showAssetDialog = false
                 currentJobForPhoto = null
             },
-            availableResources = availableResources
+            availableAssets = availableAssets
         )
     }
 }
@@ -241,7 +241,7 @@ fun CurrentJobCard(
     onCancelClick: (String) -> Unit,
     onCompleteClick: () -> Unit,
     onPhotoClick: () -> Unit,
-    onResourceClick: () -> Unit
+    onAssetClick: () -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var showPauseDialog by remember { mutableStateOf(false) }
@@ -456,9 +456,9 @@ fun CurrentJobCard(
                             }
                         }
                         OutlinedIconButton(
-                            onClick = onResourceClick
+                            onClick = onAssetClick
                         ) {
-                            Icon(Icons.Default.Inventory, contentDescription = "Add Resource")
+                            Icon(Icons.Default.Inventory, contentDescription = "Add Asset")
                         }
                         OutlinedIconButton(
                             onClick = onPhotoClick
