@@ -809,33 +809,77 @@ private fun ReasonDialog(
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var reason by remember { mutableStateOf("") }
+    var selectedOption by remember { mutableStateOf("Lunch Break") }
+    var customReason by remember { mutableStateOf("") }
+
+    val pauseReasons = listOf(
+        "Lunch Break",
+        "End of Shift",
+        "Awaiting Parts/Materials",
+        "Awaiting Customer Approval",
+        "Equipment Issue",
+        "Other"
+    )
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
-            Column {
+            Column(
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Text(message)
                 Spacer(modifier = Modifier.height(16.dp))
-                OutlinedTextField(
-                    value = reason,
-                    onValueChange = { reason = it },
-                    label = { Text("Reason") },
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 3,
-                    maxLines = 5
-                )
+
+                // Radio button options
+                pauseReasons.forEach { option ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { selectedOption = option }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = selectedOption == option,
+                            onClick = { selectedOption = option }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = option,
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
+
+                // Show text field only when "Other" is selected
+                if (selectedOption == "Other") {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = customReason,
+                        onValueChange = { customReason = it },
+                        label = { Text("Specify reason") },
+                        placeholder = { Text("Enter custom reason...") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 2,
+                        maxLines = 4
+                    )
+                }
             }
         },
         confirmButton = {
             TextButton(
                 onClick = {
-                    if (reason.isNotBlank()) {
-                        onConfirm(reason)
+                    val finalReason = if (selectedOption == "Other") {
+                        customReason
+                    } else {
+                        selectedOption
+                    }
+                    if (finalReason.isNotBlank()) {
+                        onConfirm(finalReason)
                     }
                 },
-                enabled = reason.isNotBlank()
+                enabled = if (selectedOption == "Other") customReason.isNotBlank() else true
             ) {
                 Text("Confirm")
             }
