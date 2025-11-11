@@ -134,6 +134,7 @@ fun JobsScreen(
                             label = {
                                 Text(when(status) {
                                     JobStatus.AVAILABLE -> "Available"
+                                    JobStatus.AWAITING -> "Awaiting"
                                     JobStatus.PENDING -> "Pending"
                                     JobStatus.EN_ROUTE -> "En Route"
                                     JobStatus.BUSY -> "Busy"
@@ -196,6 +197,7 @@ fun JobsScreen(
                         onStatusChange = {
                             // Handle status change based on action
                             when (it) {
+                                "accept" -> viewModel.acceptJob(job.id)
                                 "start" -> viewModel.startJob(job.id)
                                 "pause" -> {
                                     jobToPause = job
@@ -289,6 +291,7 @@ fun JobCard(
                         Text(
                             text = when(job.status) {
                                 JobStatus.AVAILABLE -> "Available"
+                                JobStatus.AWAITING -> "Awaiting"
                                 JobStatus.PENDING -> "Pending"
                                 JobStatus.EN_ROUTE -> "En Route"
                                 JobStatus.BUSY -> "Busy"
@@ -303,6 +306,7 @@ fun JobCard(
                     colors = AssistChipDefaults.assistChipColors(
                         containerColor = when(job.status) {
                             JobStatus.AVAILABLE -> MaterialTheme.colorScheme.secondaryContainer
+                            JobStatus.AWAITING -> MaterialTheme.colorScheme.tertiaryContainer
                             JobStatus.PENDING -> MaterialTheme.colorScheme.primaryContainer
                             JobStatus.EN_ROUTE -> MaterialTheme.colorScheme.tertiaryContainer
                             JobStatus.BUSY -> MaterialTheme.colorScheme.primary
@@ -389,7 +393,7 @@ fun JobCard(
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(2.dp))
             }
 
             // Email card
@@ -425,7 +429,7 @@ fun JobCard(
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(2.dp))
             }
 
             if (!job.serviceAddress.isNullOrEmpty()) {
@@ -485,6 +489,16 @@ fun JobCard(
                         Icon(Icons.Default.PersonAdd, null, Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Claim Job")
+                    }
+                }
+                JobStatus.AWAITING -> {
+                    Button(
+                        onClick = { onStatusChange("accept") },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Check, null, Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Accept Job")
                     }
                 }
                 JobStatus.PENDING -> {

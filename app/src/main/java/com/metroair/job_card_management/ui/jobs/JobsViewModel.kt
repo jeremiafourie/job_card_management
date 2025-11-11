@@ -101,9 +101,9 @@ class JobsViewModel @Inject constructor(
                 allJobs
             }
 
-            // Apply awaiting filter (jobs assigned but not yet accepted)
+            // Apply awaiting filter (jobs in AWAITING status)
             if (awaitingFilter) {
-                baseList = baseList.filter { it.isMyJob && !it.acceptedByTechnician && it.status == JobStatus.PENDING }
+                baseList = baseList.filter { it.status == JobStatus.AWAITING }
             }
             // Apply status filter
             else if (statusFilter != null) {
@@ -189,6 +189,17 @@ class JobsViewModel @Inject constructor(
                 _uiMessage.value = "Job claimed successfully"
             } else {
                 _uiMessage.value = "Failed to claim job"
+            }
+        }
+    }
+
+    fun acceptJob(jobId: Int) {
+        viewModelScope.launch {
+            val success = jobCardRepository.acceptJob(jobId)
+            if (success) {
+                _uiMessage.value = "Job accepted successfully"
+            } else {
+                _uiMessage.value = "Failed to accept job"
             }
         }
     }

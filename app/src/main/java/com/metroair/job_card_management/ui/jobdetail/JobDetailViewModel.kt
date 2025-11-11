@@ -78,6 +78,17 @@ class JobDetailViewModel @Inject constructor(
         _uiState.update { it.copy(customerSignature = signature) }
     }
 
+    fun acceptJob() {
+        viewModelScope.launch {
+            val success = jobCardRepository.acceptJob(jobId)
+            if (!success) {
+                _uiState.update { it.copy(errorMessage = "Failed to accept job") }
+            } else {
+                _uiState.update { it.copy(successMessage = "Job accepted successfully") }
+            }
+        }
+    }
+
     fun startJob() {
         viewModelScope.launch {
             val success = jobCardRepository.startJob(jobId)

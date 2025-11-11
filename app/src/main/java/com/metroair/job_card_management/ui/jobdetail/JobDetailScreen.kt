@@ -1,5 +1,6 @@
 package com.metroair.job_card_management.ui.jobdetail
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
@@ -96,36 +97,42 @@ fun JobDetailScreen(
                         Column(
                             modifier = Modifier.padding(16.dp)
                         ) {
-                            Text(
-                                text = "Job Information",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
+                            // Header with Status
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Job Information",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+
+                                // Status
+                                AssistChip(
+                                    onClick = { },
+                                    label = { Text(job.status.name.replace("_", " ")) },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Default.Schedule,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    },
+                                    colors = when (job.status) {
+                                        JobStatus.BUSY -> AssistChipDefaults.assistChipColors(
+                                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                                        )
+                                        JobStatus.COMPLETED -> AssistChipDefaults.assistChipColors(
+                                            containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                                        )
+                                        else -> AssistChipDefaults.assistChipColors()
+                                    }
+                                )
+                            }
+
                             Spacer(modifier = Modifier.height(12.dp))
-
-                            // Status
-                            AssistChip(
-                                onClick = { },
-                                label = { Text(job.status.name.replace("_", " ")) },
-                                leadingIcon = {
-                                    Icon(
-                                        Icons.Default.Schedule,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                },
-                                colors = when (job.status) {
-                                    JobStatus.BUSY -> AssistChipDefaults.assistChipColors(
-                                        containerColor = MaterialTheme.colorScheme.primaryContainer
-                                    )
-                                    JobStatus.COMPLETED -> AssistChipDefaults.assistChipColors(
-                                        containerColor = MaterialTheme.colorScheme.tertiaryContainer
-                                    )
-                                    else -> AssistChipDefaults.assistChipColors()
-                                }
-                            )
-
-                            Spacer(modifier = Modifier.height(8.dp))
 
                             // Job Title and Type
                             Text(
@@ -144,6 +151,108 @@ fun JobDetailScreen(
                                     text = job.description,
                                     style = MaterialTheme.typography.bodyMedium
                                 )
+                            }
+
+                            // Scheduled Date/Time
+                            if (job.scheduledDate != null || job.scheduledTime != null) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.Schedule,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = "${job.scheduledDate ?: "Not scheduled"} ${job.scheduledTime ?: ""}".trim(),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            // Estimated Duration
+                            if (job.estimatedDuration != null) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.Timer,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = "Est. ${job.estimatedDuration} minutes",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            // Service Location
+                            if (!job.serviceAddress.isNullOrEmpty()) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Surface(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable(
+                                            enabled = job.latitude != null && job.longitude != null
+                                        ) {
+                                            if (job.latitude != null && job.longitude != null) {
+                                                val uri = android.net.Uri.parse("geo:${job.latitude},${job.longitude}?q=${job.latitude},${job.longitude}(${job.serviceAddress})")
+                                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
+                                                intent.setPackage("com.google.android.apps.maps")
+
+                                                try {
+                                                    context.startActivity(intent)
+                                                } catch (e: android.content.ActivityNotFoundException) {
+                                                    intent.setPackage(null)
+                                                    context.startActivity(intent)
+                                                }
+                                            }
+                                        },
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                                    shape = MaterialTheme.shapes.small
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(12.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            Icons.Default.LocationOn,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(20.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "Service Location",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Text(
+                                                text = job.serviceAddress,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
+                                        if (job.latitude != null && job.longitude != null) {
+                                            Icon(
+                                                Icons.Default.Navigation,
+                                                contentDescription = "Navigate",
+                                                modifier = Modifier.size(20.dp),
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -179,32 +288,73 @@ fun JobDetailScreen(
 
                             Spacer(modifier = Modifier.height(8.dp))
 
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically
+                            // Phone number card
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        val intent = android.content.Intent(android.content.Intent.ACTION_DIAL).apply {
+                                            data = android.net.Uri.parse("tel:${job.customerPhone}")
+                                        }
+                                        context.startActivity(intent)
+                                    },
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                                shape = MaterialTheme.shapes.small
                             ) {
-                                Icon(
-                                    Icons.Default.Phone,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(job.customerPhone)
-                            }
-
-                            if (!job.serviceAddress.isNullOrEmpty()) {
-                                Spacer(modifier = Modifier.height(8.dp))
                                 Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
-                                        Icons.Default.LocationOn,
+                                        Icons.Default.Phone,
                                         contentDescription = null,
                                         modifier = Modifier.size(20.dp),
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        tint = MaterialTheme.colorScheme.primary
                                     )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(job.serviceAddress)
+                                    Text(
+                                        text = job.customerPhone,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                            }
+
+                            if (!job.customerEmail.isNullOrEmpty()) {
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                // Email card
+                                Surface(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            val intent = android.content.Intent(android.content.Intent.ACTION_SENDTO).apply {
+                                                data = android.net.Uri.parse("mailto:${job.customerEmail}")
+                                            }
+                                            context.startActivity(intent)
+                                        },
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                                    shape = MaterialTheme.shapes.small
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(12.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Email,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(20.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                        Text(
+                                            text = job.customerEmail,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -362,7 +512,7 @@ fun JobDetailScreen(
                     }
 
                     // Timeline Card
-                    if (job.status != JobStatus.PENDING) {
+                    if (job.status != JobStatus.PENDING && job.status != JobStatus.AWAITING) {
                         item {
                             JobTimelineCard(job = job)
                         }
@@ -461,6 +611,16 @@ fun JobDetailScreen(
                 // Action Buttons
                 item {
                     when (job.status) {
+                        JobStatus.AWAITING -> {
+                            Button(
+                                onClick = { viewModel.acceptJob() },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.Check, contentDescription = null)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Accept Job")
+                            }
+                        }
                         JobStatus.PENDING -> {
                             Button(
                                 onClick = { viewModel.startJob() },

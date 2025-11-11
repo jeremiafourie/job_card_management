@@ -46,12 +46,12 @@ interface JobCardDao {
            "ORDER BY scheduledDate ASC, scheduledTime ASC")
     fun getAvailableJobs(): Flow<List<JobCardEntity>>
 
-    @Query("UPDATE job_cards SET isMyJob = 1, status = 'PENDING', updatedAt = :timestamp " +
+    @Query("UPDATE job_cards SET isMyJob = 1, acceptedByTechnician = 1, acceptedAt = :timestamp, status = 'PENDING', updatedAt = :timestamp " +
            "WHERE id = :jobId AND isMyJob = 0")
     suspend fun claimJob(jobId: Int, timestamp: Long): Int
 
-    @Query("UPDATE job_cards SET acceptedByTechnician = 1, acceptedAt = :timestamp, updatedAt = :timestamp " +
-           "WHERE id = :jobId AND isMyJob = 1")
+    @Query("UPDATE job_cards SET acceptedByTechnician = 1, acceptedAt = :timestamp, status = 'PENDING', updatedAt = :timestamp " +
+           "WHERE id = :jobId AND isMyJob = 1 AND status = 'AWAITING'")
     suspend fun acceptJob(jobId: Int, timestamp: Long): Int
 
     // ========== JOB STATUS UPDATES ==========
