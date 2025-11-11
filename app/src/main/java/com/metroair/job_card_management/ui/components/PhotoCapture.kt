@@ -33,6 +33,7 @@ fun PhotoCaptureDialog(
     currentPhotoUri: Uri?,
     preselectedCategory: PhotoCategory? = null
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var showCategoryDialog by remember { mutableStateOf(false) }
     var pendingPhotoUri by remember { mutableStateOf<Uri?>(null) }
 
@@ -61,18 +62,44 @@ fun PhotoCaptureDialog(
         }
     }
 
-    // Gallery launcher
+    // Gallery launcher - copies selected photo to persistent storage
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
-        uri?.let {
-            if (preselectedCategory != null) {
-                // If category is preselected, still show notes dialog
-                pendingPhotoUri = it
-                showCategoryDialog = true
-            } else {
-                pendingPhotoUri = it
-                showCategoryDialog = true
+        uri?.let { selectedUri ->
+            // Copy gallery photo to persistent storage
+            try {
+                val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+                val storageDir = context.getExternalFilesDir(android.os.Environment.DIRECTORY_PICTURES)
+                val destinationFile = File.createTempFile(
+                    "JPEG_${timeStamp}_",
+                    ".jpg",
+                    storageDir
+                )
+
+                // Copy the content from gallery URI to our persistent file
+                context.contentResolver.openInputStream(selectedUri)?.use { inputStream ->
+                    destinationFile.outputStream().use { outputStream ->
+                        inputStream.copyTo(outputStream)
+                    }
+                }
+
+                // Create a persistent FileProvider URI
+                val persistentUri = FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    destinationFile
+                )
+
+                if (preselectedCategory != null) {
+                    pendingPhotoUri = persistentUri
+                    showCategoryDialog = true
+                } else {
+                    pendingPhotoUri = persistentUri
+                    showCategoryDialog = true
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("PhotoCapture", "Error copying gallery photo to persistent storage", e)
             }
         }
     }
