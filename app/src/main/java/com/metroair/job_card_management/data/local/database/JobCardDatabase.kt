@@ -6,11 +6,14 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.metroair.job_card_management.data.local.database.dao.AssetDao
 import com.metroair.job_card_management.data.local.database.dao.CurrentTechnicianDao
 import com.metroair.job_card_management.data.local.database.dao.CustomerDao
 import com.metroair.job_card_management.data.local.database.dao.JobCardDao
 import com.metroair.job_card_management.data.local.database.dao.ResourceDao
 import com.metroair.job_card_management.data.local.database.dao.ToolCheckoutDao
+import com.metroair.job_card_management.data.local.database.entities.AssetEntity
+import com.metroair.job_card_management.data.local.database.entities.AssetCheckoutEntity
 import com.metroair.job_card_management.data.local.database.entities.CurrentTechnicianEntity
 import com.metroair.job_card_management.data.local.database.entities.CustomerEntity
 import com.metroair.job_card_management.data.local.database.entities.JobCardEntity
@@ -27,9 +30,11 @@ import java.time.LocalDate
         CustomerEntity::class,
         ResourceEntity::class,
         CurrentTechnicianEntity::class,
-        ToolCheckoutEntity::class
+        ToolCheckoutEntity::class,
+        AssetEntity::class,
+        AssetCheckoutEntity::class
     ],
-    version = 10, // Updated resourcesUsed format to include code field
+    version = 11, // Added Asset management entities
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -40,6 +45,7 @@ abstract class JobCardDatabase : RoomDatabase() {
     abstract fun resourceDao(): ResourceDao
     abstract fun currentTechnicianDao(): CurrentTechnicianDao
     abstract fun toolCheckoutDao(): ToolCheckoutDao
+    abstract fun assetDao(): AssetDao
 
     companion object {
         @Volatile
@@ -392,11 +398,109 @@ abstract class JobCardDatabase : RoomDatabase() {
                 )
             )
 
+            // Sample assets
+            val assets = listOf(
+                AssetEntity(
+                    assetCode = "TOOL-001",
+                    assetName = "Digital Manifold Gauge Set",
+                    assetType = "TOOL",
+                    serialNumber = "MG-2024-001",
+                    manufacturer = "Fieldpiece",
+                    model = "SM480V",
+                    isAvailable = true
+                ),
+                AssetEntity(
+                    assetCode = "TOOL-002",
+                    assetName = "Recovery Machine",
+                    assetType = "TOOL",
+                    serialNumber = "RM-2024-002",
+                    manufacturer = "Inficon",
+                    model = "G5Twin",
+                    isAvailable = true
+                ),
+                AssetEntity(
+                    assetCode = "AC-001",
+                    assetName = "Portable AC Unit - 12000 BTU",
+                    assetType = "AIR_CONDITIONER",
+                    serialNumber = "PAC-2024-001",
+                    manufacturer = "LG",
+                    model = "LP1217GSR",
+                    isAvailable = true,
+                    notes = "For temporary customer use"
+                ),
+                AssetEntity(
+                    assetCode = "AC-002",
+                    assetName = "Portable AC Unit - 18000 BTU",
+                    assetType = "AIR_CONDITIONER",
+                    serialNumber = "PAC-2024-002",
+                    manufacturer = "Samsung",
+                    model = "AX3000",
+                    isAvailable = false,
+                    currentHolder = "John Technician"
+                ),
+                AssetEntity(
+                    assetCode = "LADDER-001",
+                    assetName = "Extension Ladder - 24ft",
+                    assetType = "LADDER",
+                    serialNumber = "LAD-2024-001",
+                    manufacturer = "Werner",
+                    model = "D1224-2",
+                    isAvailable = true
+                ),
+                AssetEntity(
+                    assetCode = "LADDER-002",
+                    assetName = "Step Ladder - 8ft",
+                    assetType = "LADDER",
+                    serialNumber = "LAD-2024-002",
+                    manufacturer = "Werner",
+                    model = "FS108",
+                    isAvailable = true
+                ),
+                AssetEntity(
+                    assetCode = "TOOL-003",
+                    assetName = "Vacuum Pump",
+                    assetType = "PUMP",
+                    serialNumber = "VP-2024-001",
+                    manufacturer = "Yellow Jacket",
+                    model = "93600",
+                    isAvailable = true
+                ),
+                AssetEntity(
+                    assetCode = "METER-001",
+                    assetName = "Digital Multimeter",
+                    assetType = "METER",
+                    serialNumber = "DM-2024-001",
+                    manufacturer = "Fluke",
+                    model = "87V",
+                    isAvailable = true
+                ),
+                AssetEntity(
+                    assetCode = "TOOL-004",
+                    assetName = "Refrigerant Leak Detector",
+                    assetType = "TOOL",
+                    serialNumber = "LD-2024-001",
+                    manufacturer = "Inficon",
+                    model = "D-TEK 3",
+                    isAvailable = true
+                ),
+                AssetEntity(
+                    assetCode = "EQUIP-001",
+                    assetName = "Refrigerant Recovery Tank",
+                    assetType = "EQUIPMENT",
+                    serialNumber = "RT-2024-001",
+                    manufacturer = "Mastercool",
+                    model = "62010",
+                    isAvailable = true,
+                    notes = "30lb capacity"
+                )
+            )
+
             // Insert all sample data
             database.currentTechnicianDao().setCurrentTechnician(currentTechnician)
             database.customerDao().insertAllCustomers(customers)
             database.jobCardDao().insertJobs(jobCards)
             database.resourceDao().insertAllResources(resources)
+            database.assetDao().insertAssets(assets)
 
             // Set current active job ID for the technician
             database.currentTechnicianDao().setCurrentActiveJob(1001)

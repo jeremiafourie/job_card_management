@@ -2,6 +2,7 @@ package com.metroair.job_card_management.di
 
 import android.content.Context
 import com.metroair.job_card_management.data.local.database.JobCardDatabase
+import com.metroair.job_card_management.data.local.database.dao.AssetDao
 import com.metroair.job_card_management.data.local.database.dao.CurrentTechnicianDao
 import com.metroair.job_card_management.data.local.database.dao.CustomerDao
 import com.metroair.job_card_management.data.local.database.dao.JobCardDao
@@ -38,4 +39,7 @@ object DatabaseModule {
 
     @Provides
     fun provideToolCheckoutDao(database: JobCardDatabase): ToolCheckoutDao = database.toolCheckoutDao()
+
+    @Provides
+    fun provideAssetDao(database: JobCardDatabase): AssetDao = database.assetDao()
 }
