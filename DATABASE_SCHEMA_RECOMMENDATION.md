@@ -1,0 +1,776 @@
+# Database Schema Recommendation Report
+## Job Card Management System
+
+---
+
+## 1. Executive Summary
+
+This report proposes a streamlined, well-structured database schema for the job card management system. The design focuses on:
+- **One technician user** (single-user mobile app)
+- **Job cards** as the central entity
+- **Fixed assets** (tools, equipment - reusable) with full status history tracking
+- **Inventory assets** (consumables, parts - depletable)
+- **New asset purchases** with receipt tracking and asset integration workflow
+- **Minimal relational tables** for flexibility
+
+---
+
+## 2. Schema Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           CORE ENTITIES                                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  TECHNICIAN (1 record)                                                       │
+│       │                                                                      │
+│       ▼                                                                      │
+│  JOB_CARDS ◄────────────────────────────────────────────────────────────┐   │
+│       │                                                                  │   │
+│       ├──────► JOB_FIXED_ASSETS (which fixed assets used on job)        │   │
+│       │              │                                                   │   │
+│       │              ▼                                                   │   │
+│       │        FIXED_ASSETS (tools, equipment - status_history JSON)    │   │
+│       │                                                                  │   │
+│       ├──────► JOB_INVENTORY_USAGE (consumables used on job)            │   │
+│       │              │                                                   │   │
+│       │              ▼                                                   │   │
+│       │        INVENTORY_ASSETS (parts, consumables - depletable)       │   │
+│       │                                                                  │   │
+│       └──────► JOB_PURCHASES (new items purchased for job) ─────────────┘   │
+│                      │                                                       │
+│                      ▼                                                       │
+│                PURCHASE_RECEIPTS (receipt images/documents)                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 3. Detailed Table Definitions
+
+---
+
+### 3.1 TECHNICIAN
+
+Stores the single logged-in technician. Always exactly 1 record.
+
+```sql
+CREATE TABLE technician (
+    id                  INTEGER PRIMARY KEY DEFAULT 1,
+    employee_number     TEXT NOT NULL,
+    name                TEXT NOT NULL,
+    email               TEXT NOT NULL,
+    phone               TEXT NOT NULL,
+    specialization      TEXT,
+    profile_photo_path  TEXT,
+    auth_token          TEXT,
+    is_on_duty          INTEGER DEFAULT 1,
+    current_job_id      INTEGER,
+    login_time          INTEGER,
+    last_sync_time      INTEGER,
+    created_at          INTEGER NOT NULL,
+    updated_at          INTEGER NOT NULL
+);
+```
+
+| Field | Role |
+|-------|------|
+| `id` | Always 1 - enforces single technician |
+| `employee_number` | Links to company HR/payroll system |
+| `name` | Display name on UI and reports |
+| `specialization` | Skills for job matching (e.g., "AC Installation") |
+| `is_on_duty` | Controls job availability (1=on, 0=off) |
+| `current_job_id` | Quick reference to active BUSY job |
+| `auth_token` | API authentication for future server sync |
+| `last_sync_time` | Track when data was last synced to server |
+
+---
+
+### 3.2 JOB_CARDS
+
+Central entity - all work revolves around job cards.
+
+```sql
+CREATE TABLE job_cards (
+    id                  INTEGER PRIMARY KEY,
+    job_number          TEXT NOT NULL UNIQUE,
+
+    -- Customer Info (denormalized for offline access)
+    customer_name       TEXT NOT NULL,
+    customer_phone      TEXT NOT NULL,
+    customer_email      TEXT,
+
+    -- Job Details
+    title               TEXT NOT NULL,
+    description         TEXT,
+    job_type            TEXT NOT NULL,
+    status              TEXT NOT NULL DEFAULT 'AVAILABLE',
+    priority            TEXT DEFAULT 'NORMAL',
+
+    -- Location
+    service_address     TEXT NOT NULL,
+    latitude            REAL,
+    longitude           REAL,
+
+    -- Scheduling
+    scheduled_date      TEXT NOT NULL,
+    scheduled_time      TEXT,
+    estimated_duration  INTEGER,
+
+    -- Workflow Timestamps
+    accepted_at         INTEGER,
+    en_route_at         INTEGER,
+    started_at          INTEGER,
+    completed_at        INTEGER,
+    cancelled_at        INTEGER,
+
+    -- Pause Tracking
+    total_paused_ms     INTEGER DEFAULT 0,
+    pause_history       TEXT,
+
+    -- Work Completion
+    work_performed      TEXT,
+    technician_notes    TEXT,
+    issues_encountered  TEXT,
+    cancellation_reason TEXT,
+
+    -- Evidence
+    customer_signature  TEXT,
+    before_photos       TEXT,
+    after_photos        TEXT,
+    other_photos        TEXT,
+
+    -- Follow-up
+    requires_follow_up  INTEGER DEFAULT 0,
+    follow_up_notes     TEXT,
+
+    -- Sync Status
+    is_synced           INTEGER DEFAULT 0,
+    last_synced_at      INTEGER,
+
+    -- Metadata
+    created_at          INTEGER NOT NULL,
+    updated_at          INTEGER NOT NULL
+);
+
+CREATE INDEX idx_job_cards_status ON job_cards(status);
+CREATE INDEX idx_job_cards_scheduled_date ON job_cards(scheduled_date);
+CREATE INDEX idx_job_cards_job_number ON job_cards(job_number);
+```
+
+| Field | Role |
+|-------|------|
+| `id` | Server-side job ID (synced from backend) |
+| `job_number` | Human-readable identifier (e.g., "JC-2024-001") |
+| `customer_*` | Denormalized customer info for offline access |
+| `job_type` | INSTALLATION \| REPAIR \| SERVICE \| INSPECTION |
+| `status` | Current workflow state (see status workflow below) |
+| `priority` | LOW \| NORMAL \| HIGH \| URGENT |
+| `scheduled_date` | YYYY-MM-DD format for date queries |
+| `estimated_duration` | Expected minutes to complete |
+| `total_paused_ms` | Accumulated pause time in milliseconds |
+| `pause_history` | JSON array of pause events with reasons |
+| `customer_signature` | Base64 encoded signature image |
+| `before/after/other_photos` | JSON arrays: [{uri, notes}] |
+| `is_synced` | 0=pending upload, 1=synced to server |
+
+**Status Workflow:**
+```
+AVAILABLE → AWAITING → PENDING → EN_ROUTE → BUSY → COMPLETED
+                                    ↕         ↕
+                                  PAUSED ←→ PAUSED
+
+Any status (except COMPLETED) → CANCELLED
+```
+
+| Status | Meaning |
+|--------|---------|
+| `AVAILABLE` | Unassigned, technician can claim |
+| `AWAITING` | Assigned, not yet accepted |
+| `PENDING` | Accepted, scheduled but not started |
+| `EN_ROUTE` | Traveling to job site |
+| `BUSY` | Actively working |
+| `PAUSED` | Work temporarily stopped |
+| `COMPLETED` | Job finished successfully |
+| `CANCELLED` | Job cancelled (with reason) |
+
+---
+
+### 3.3 FIXED_ASSETS
+
+Reusable tools and equipment. Status derived from `status_history` JSON.
+
+```sql
+CREATE TABLE fixed_assets (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    asset_code          TEXT NOT NULL UNIQUE,
+    asset_name          TEXT NOT NULL,
+    asset_type          TEXT NOT NULL,
+
+    -- Identification
+    serial_number       TEXT,
+    manufacturer        TEXT,
+    model               TEXT,
+
+    -- Status History (JSON) - all state changes tracked here
+    status_history      TEXT NOT NULL,
+
+    -- Maintenance Scheduling
+    purchase_date       INTEGER,
+    next_maintenance    INTEGER,
+
+    -- Notes
+    notes               TEXT,
+
+    -- Metadata
+    created_at          INTEGER NOT NULL,
+    updated_at          INTEGER NOT NULL
+);
+
+CREATE INDEX idx_fixed_assets_code ON fixed_assets(asset_code);
+CREATE INDEX idx_fixed_assets_type ON fixed_assets(asset_type);
+```
+
+| Field | Role |
+|-------|------|
+| `asset_code` | Unique barcode/QR code label (e.g., "TOOL-001") |
+| `asset_name` | Display name (e.g., "Manifold Gauge Set") |
+| `asset_type` | TOOL \| EQUIPMENT \| VEHICLE \| METER \| LADDER |
+| `serial_number` | Manufacturer's serial for warranty/tracking |
+| `manufacturer` | Brand name |
+| `model` | Model number/name |
+| `status_history` | JSON array - full audit trail (see below) |
+| `purchase_date` | When asset was acquired (timestamp) |
+| `next_maintenance` | Scheduled maintenance date (timestamp) |
+| `notes` | Specs, capacity, special instructions |
+
+**Status History JSON Structure:**
+```json
+[
+  {
+    "status": "AVAILABLE",
+    "previous_status": null,
+    "user_id": 1,
+    "user_name": "Mike Wilson",
+    "timestamp": 1701000000000,
+    "notes": "Initial entry - new asset",
+    "job_id": null,
+    "condition": "GOOD"
+  },
+  {
+    "status": "CHECKED_OUT",
+    "previous_status": "AVAILABLE",
+    "user_id": 1,
+    "user_name": "Mike Wilson",
+    "timestamp": 1701234567890,
+    "notes": "Taking for job JC-2024-052",
+    "job_id": 52,
+    "condition": "GOOD"
+  },
+  {
+    "status": "AVAILABLE",
+    "previous_status": "CHECKED_OUT",
+    "user_id": 1,
+    "user_name": "Mike Wilson",
+    "timestamp": 1701298765432,
+    "notes": "Returned after job completion",
+    "job_id": 52,
+    "condition": "GOOD"
+  },
+  {
+    "status": "IN_MAINTENANCE",
+    "previous_status": "AVAILABLE",
+    "user_id": 1,
+    "user_name": "Mike Wilson",
+    "timestamp": 1701345678900,
+    "notes": "Scheduled calibration",
+    "job_id": null,
+    "condition": null
+  },
+  {
+    "status": "AVAILABLE",
+    "previous_status": "IN_MAINTENANCE",
+    "user_id": 1,
+    "user_name": "Mike Wilson",
+    "timestamp": 1701432109876,
+    "notes": "Calibration complete, certified until 2025-06",
+    "job_id": null,
+    "condition": "GOOD"
+  }
+]
+```
+
+**Status Values:**
+| Status | Meaning |
+|--------|---------|
+| `AVAILABLE` | In stock, ready for checkout |
+| `CHECKED_OUT` | Currently with a technician |
+| `IN_MAINTENANCE` | Being serviced/repaired |
+| `DAMAGED` | Needs repair before use |
+| `RETIRED` | No longer in service |
+
+**Derived Properties (in Domain Model):**
+```kotlin
+// Current status = last entry's status
+val currentStatus: String
+    get() = statusHistory.lastOrNull()?.status ?: "AVAILABLE"
+
+// Current holder (only if CHECKED_OUT)
+val currentHolderId: Int?
+    get() = statusHistory.lastOrNull()
+        ?.takeIf { it.status == "CHECKED_OUT" }?.userId
+
+val currentHolderName: String?
+    get() = statusHistory.lastOrNull()
+        ?.takeIf { it.status == "CHECKED_OUT" }?.userName
+
+// Last maintenance completed
+val lastMaintenanceDate: Long?
+    get() = statusHistory
+        .filter { it.previousStatus == "IN_MAINTENANCE" && it.status == "AVAILABLE" }
+        .maxOfOrNull { it.timestamp }
+
+// Check if available
+val isAvailable: Boolean
+    get() = currentStatus == "AVAILABLE"
+```
+
+---
+
+### 3.4 INVENTORY_ASSETS
+
+Consumables and parts tracked by quantity.
+
+```sql
+CREATE TABLE inventory_assets (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    item_code           TEXT NOT NULL UNIQUE,
+    item_name           TEXT NOT NULL,
+    category            TEXT NOT NULL,
+
+    -- Stock Levels
+    current_stock       REAL NOT NULL DEFAULT 0,
+    minimum_stock       REAL NOT NULL DEFAULT 0,
+    unit_of_measure     TEXT NOT NULL,
+
+    -- Pricing
+    unit_cost           REAL,
+
+    -- Notes
+    notes               TEXT,
+
+    -- Metadata
+    created_at          INTEGER NOT NULL,
+    updated_at          INTEGER NOT NULL
+);
+
+CREATE INDEX idx_inventory_code ON inventory_assets(item_code);
+CREATE INDEX idx_inventory_category ON inventory_assets(category);
+```
+
+| Field | Role |
+|-------|------|
+| `item_code` | SKU/part number (e.g., "GAS-R410A") |
+| `item_name` | Display name (e.g., "R410A Refrigerant Gas") |
+| `category` | CONSUMABLE \| PART \| SUPPLY |
+| `current_stock` | Current quantity (REAL for decimals: 2.5 kg) |
+| `minimum_stock` | Reorder threshold for low-stock alerts |
+| `unit_of_measure` | kg \| piece \| meter \| liter \| roll |
+| `unit_cost` | Cost per unit for job costing |
+
+**Derived Property:**
+```kotlin
+val isLowStock: Boolean
+    get() = currentStock <= minimumStock
+```
+
+**Examples:**
+- R410A Refrigerant Gas (50 kg) - CONSUMABLE
+- 35uF Capacitor (25 pieces) - PART
+- Copper Pipe 1/4" (100 meters) - SUPPLY
+
+---
+
+### 3.5 JOB_FIXED_ASSETS
+
+Links fixed assets to jobs (checkout/return tracking per job).
+
+```sql
+CREATE TABLE job_fixed_assets (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id              INTEGER NOT NULL,
+    fixed_asset_id      INTEGER NOT NULL,
+
+    -- Checkout Details
+    checkout_time       INTEGER NOT NULL,
+    return_time         INTEGER,
+
+    -- Condition Tracking
+    checkout_condition  TEXT,
+    return_condition    TEXT,
+    checkout_notes      TEXT,
+    return_notes        TEXT,
+
+    FOREIGN KEY (job_id) REFERENCES job_cards(id) ON DELETE CASCADE,
+    FOREIGN KEY (fixed_asset_id) REFERENCES fixed_assets(id) ON DELETE RESTRICT
+);
+
+CREATE INDEX idx_job_fixed_job ON job_fixed_assets(job_id);
+CREATE INDEX idx_job_fixed_asset ON job_fixed_assets(fixed_asset_id);
+```
+
+| Field | Role |
+|-------|------|
+| `job_id` | Which job this checkout is for |
+| `fixed_asset_id` | Which asset was checked out |
+| `checkout_time` | When taken for job (timestamp) |
+| `return_time` | When returned (null if still out) |
+| `checkout_condition` | GOOD \| FAIR \| POOR - state at checkout |
+| `return_condition` | State when returned |
+| `checkout_notes` | Notes when taking asset |
+| `return_notes` | Issues/notes when returning |
+
+**Foreign Key Behavior:**
+- `ON DELETE CASCADE` - Job deletion removes checkout records
+- `ON DELETE RESTRICT` - Cannot delete asset with checkout history
+
+---
+
+### 3.6 JOB_INVENTORY_USAGE
+
+Tracks consumables/parts used per job.
+
+```sql
+CREATE TABLE job_inventory_usage (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id              INTEGER NOT NULL,
+    inventory_asset_id  INTEGER NOT NULL,
+
+    -- Usage Details
+    quantity_used       REAL NOT NULL,
+    used_at             INTEGER NOT NULL,
+
+    -- Notes
+    notes               TEXT,
+
+    FOREIGN KEY (job_id) REFERENCES job_cards(id) ON DELETE CASCADE,
+    FOREIGN KEY (inventory_asset_id) REFERENCES inventory_assets(id) ON DELETE RESTRICT
+);
+
+CREATE INDEX idx_job_inventory_job ON job_inventory_usage(job_id);
+CREATE INDEX idx_job_inventory_asset ON job_inventory_usage(inventory_asset_id);
+```
+
+| Field | Role |
+|-------|------|
+| `job_id` | Which job consumed the item |
+| `inventory_asset_id` | Which inventory item was used |
+| `quantity_used` | Amount consumed (REAL for "1.5 kg") |
+| `used_at` | When consumption was recorded (timestamp) |
+| `notes` | Why/how it was used |
+
+**Business Logic:** On insert, decrement `inventory_assets.current_stock` by `quantity_used`.
+
+---
+
+### 3.7 JOB_PURCHASES
+
+New items purchased during a job (not in existing inventory).
+
+```sql
+CREATE TABLE job_purchases (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id              INTEGER NOT NULL,
+
+    -- Purchase Details
+    item_name           TEXT NOT NULL,
+    item_description    TEXT,
+    quantity            REAL NOT NULL,
+    unit_of_measure     TEXT NOT NULL,
+    unit_cost           REAL NOT NULL,
+    total_cost          REAL NOT NULL,
+
+    -- Vendor Info
+    vendor_name         TEXT,
+    purchase_date       INTEGER NOT NULL,
+
+    -- Asset Integration
+    target_asset_type   TEXT NOT NULL,
+    linked_asset_id     INTEGER,
+    is_integrated       INTEGER DEFAULT 0,
+
+    -- Approval (optional)
+    approval_status     TEXT DEFAULT 'PENDING',
+    approved_by         TEXT,
+    approved_at         INTEGER,
+    rejection_reason    TEXT,
+
+    -- Notes
+    notes               TEXT,
+
+    -- Metadata
+    created_at          INTEGER NOT NULL,
+    updated_at          INTEGER NOT NULL,
+
+    FOREIGN KEY (job_id) REFERENCES job_cards(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_job_purchases_job ON job_purchases(job_id);
+CREATE INDEX idx_job_purchases_integrated ON job_purchases(is_integrated);
+CREATE INDEX idx_job_purchases_approval ON job_purchases(approval_status);
+```
+
+| Field | Role |
+|-------|------|
+| `job_id` | Which job required this purchase |
+| `item_name` | What was purchased |
+| `item_description` | Additional details/specs |
+| `quantity` | How many/much (REAL for decimals) |
+| `unit_of_measure` | piece \| kg \| meter \| liter |
+| `unit_cost` | Price per unit |
+| `total_cost` | quantity × unit_cost |
+| `vendor_name` | Store/supplier name |
+| `purchase_date` | When purchased (timestamp) |
+| `target_asset_type` | FIXED \| INVENTORY \| NONE |
+| `linked_asset_id` | FK to created/updated asset after integration |
+| `is_integrated` | 0=pending, 1=added to assets |
+| `approval_status` | PENDING \| APPROVED \| REJECTED |
+| `approved_by` | Manager name who approved |
+| `rejection_reason` | Why rejected (if applicable) |
+
+**Target Asset Type:**
+| Value | Meaning |
+|-------|---------|
+| `FIXED` | Becomes a new fixed asset (tool, equipment) |
+| `INVENTORY` | Adds to inventory stock |
+| `NONE` | One-time expense (not tracked as asset) |
+
+**Integration Workflow:**
+1. Technician purchases item → creates `job_purchases` record
+2. Uploads receipt → creates `purchase_receipts` record
+3. Manager reviews → sets `approval_status`
+4. If APPROVED + INVENTORY: increment existing stock or create new item
+5. If APPROVED + FIXED: create new fixed_assets record
+6. Set `linked_asset_id` and `is_integrated = 1`
+
+---
+
+### 3.8 PURCHASE_RECEIPTS
+
+Receipt documentation for purchases.
+
+```sql
+CREATE TABLE purchase_receipts (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    purchase_id         INTEGER NOT NULL,
+
+    -- Receipt File
+    file_path           TEXT NOT NULL,
+    file_type           TEXT NOT NULL,
+    file_size           INTEGER,
+
+    -- Metadata
+    uploaded_at         INTEGER NOT NULL,
+    notes               TEXT,
+
+    FOREIGN KEY (purchase_id) REFERENCES job_purchases(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_receipts_purchase ON purchase_receipts(purchase_id);
+```
+
+| Field | Role |
+|-------|------|
+| `purchase_id` | Which purchase this receipt is for |
+| `file_path` | Local path to image/PDF (e.g., "/data/receipts/R-001.jpg") |
+| `file_type` | IMAGE \| PDF |
+| `file_size` | Size in bytes |
+| `uploaded_at` | When receipt was captured (timestamp) |
+| `notes` | Additional notes about receipt |
+
+---
+
+## 4. Relationship Summary
+
+| Relationship | Type | Description |
+|--------------|------|-------------|
+| technician → job_cards | 1:N | One technician handles many jobs |
+| job_cards → job_fixed_assets | 1:N | One job uses multiple fixed assets |
+| fixed_assets → job_fixed_assets | 1:N | One asset used across many jobs |
+| job_cards → job_inventory_usage | 1:N | One job consumes multiple items |
+| inventory_assets → job_inventory_usage | 1:N | One item used across many jobs |
+| job_cards → job_purchases | 1:N | One job may have multiple purchases |
+| job_purchases → purchase_receipts | 1:N | One purchase may have multiple receipts |
+
+---
+
+## 5. Visual Schema Diagram
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                                                                              │
+│  ┌─────────────┐         ┌──────────────────────────────────────────────┐   │
+│  │ TECHNICIAN  │         │              JOB_CARDS                        │   │
+│  │─────────────│         │──────────────────────────────────────────────│   │
+│  │ id (PK)     │────────►│ id (PK)                                      │   │
+│  │ emp_number  │         │ job_number (UNIQUE)                          │   │
+│  │ name        │         │ customer_name, phone, email                   │   │
+│  │ email       │         │ title, description, job_type                  │   │
+│  │ phone       │         │ status, priority                              │   │
+│  │ is_on_duty  │         │ service_address, lat, lng                     │   │
+│  │ current_job │         │ scheduled_date, scheduled_time                │   │
+│  └─────────────┘         │ workflow timestamps...                        │   │
+│                          │ work details, photos, signature               │   │
+│                          └──────────────────────────────────────────────┘   │
+│                                          │                                   │
+│                    ┌─────────────────────┼─────────────────────┐            │
+│                    │                     │                     │            │
+│                    ▼                     ▼                     ▼            │
+│  ┌─────────────────────────┐ ┌─────────────────────────┐ ┌─────────────────┐│
+│  │  JOB_FIXED_ASSETS       │ │  JOB_INVENTORY_USAGE    │ │  JOB_PURCHASES  ││
+│  │─────────────────────────│ │─────────────────────────│ │─────────────────││
+│  │ id (PK)                 │ │ id (PK)                 │ │ id (PK)         ││
+│  │ job_id (FK)             │ │ job_id (FK)             │ │ job_id (FK)     ││
+│  │ fixed_asset_id (FK)     │ │ inventory_asset_id (FK) │ │ item_name       ││
+│  │ checkout_time           │ │ quantity_used           │ │ quantity, cost  ││
+│  │ return_time             │ │ used_at                 │ │ target_type     ││
+│  │ condition tracking      │ │ notes                   │ │ is_integrated   ││
+│  └───────────┬─────────────┘ └───────────┬─────────────┘ └────────┬────────┘│
+│              │                           │                        │         │
+│              ▼                           ▼                        ▼         │
+│  ┌─────────────────────────┐ ┌─────────────────────────┐ ┌─────────────────┐│
+│  │    FIXED_ASSETS         │ │   INVENTORY_ASSETS      │ │PURCHASE_RECEIPTS││
+│  │─────────────────────────│ │─────────────────────────│ │─────────────────││
+│  │ id (PK)                 │ │ id (PK)                 │ │ id (PK)         ││
+│  │ asset_code (UNIQUE)     │ │ item_code (UNIQUE)      │ │ purchase_id(FK) ││
+│  │ asset_name, asset_type  │ │ item_name, category     │ │ file_path       ││
+│  │ serial, manufacturer    │ │ current_stock           │ │ file_type       ││
+│  │ status_history (JSON)   │ │ minimum_stock           │ │ uploaded_at     ││
+│  │ next_maintenance        │ │ unit_of_measure         │ └─────────────────┘│
+│  └─────────────────────────┘ │ unit_cost               │                    │
+│                              └─────────────────────────┘                    │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 6. Sample Queries
+
+**Get all resources used on a job:**
+```sql
+-- Fixed assets checked out
+SELECT fa.asset_name, fa.asset_code, jf.checkout_time, jf.return_time
+FROM job_fixed_assets jf
+JOIN fixed_assets fa ON jf.fixed_asset_id = fa.id
+WHERE jf.job_id = ?;
+
+-- Inventory consumed
+SELECT ia.item_name, ia.item_code, ji.quantity_used, ia.unit_of_measure
+FROM job_inventory_usage ji
+JOIN inventory_assets ia ON ji.inventory_asset_id = ia.id
+WHERE ji.job_id = ?;
+
+-- Purchases made
+SELECT item_name, quantity, total_cost, approval_status
+FROM job_purchases
+WHERE job_id = ?;
+```
+
+**Low stock alert:**
+```sql
+SELECT item_name, item_code, current_stock, minimum_stock, unit_of_measure
+FROM inventory_assets
+WHERE current_stock <= minimum_stock;
+```
+
+**Pending purchase integrations:**
+```sql
+SELECT p.*, j.job_number
+FROM job_purchases p
+JOIN job_cards j ON p.job_id = j.id
+WHERE p.is_integrated = 0 AND p.approval_status = 'APPROVED';
+```
+
+**Assets due for maintenance (next 7 days):**
+```sql
+SELECT asset_name, asset_code, next_maintenance
+FROM fixed_assets
+WHERE next_maintenance <= strftime('%s', 'now') * 1000 + 604800000
+ORDER BY next_maintenance ASC;
+```
+
+**Job cost summary:**
+```sql
+SELECT
+    j.job_number,
+    COALESCE(SUM(ji.quantity_used * ia.unit_cost), 0) AS inventory_cost,
+    COALESCE((SELECT SUM(total_cost) FROM job_purchases WHERE job_id = j.id), 0) AS purchase_cost
+FROM job_cards j
+LEFT JOIN job_inventory_usage ji ON j.id = ji.job_id
+LEFT JOIN inventory_assets ia ON ji.inventory_asset_id = ia.id
+WHERE j.id = ?
+GROUP BY j.id;
+```
+
+---
+
+## 7. Table Summary
+
+| Table | Purpose | Expected Records |
+|-------|---------|------------------|
+| technician | Current user | 1 (always) |
+| job_cards | All jobs | Hundreds over time |
+| fixed_assets | Reusable tools/equipment | 10-50 |
+| inventory_assets | Consumable parts/supplies | 20-100 |
+| job_fixed_assets | Asset checkouts per job | 1-5 per job |
+| job_inventory_usage | Consumables per job | 2-10 per job |
+| job_purchases | Ad-hoc purchases | 0-3 per job |
+| purchase_receipts | Receipt files | 1 per purchase |
+
+**Total: 8 tables**
+
+---
+
+## 8. Key Design Decisions
+
+### Why separate Fixed vs Inventory?
+
+| Aspect | Fixed Assets | Inventory Assets |
+|--------|--------------|------------------|
+| Nature | Reusable, tracked individually | Consumable, tracked by quantity |
+| Tracking | Checkout/return with history | Deduct from stock |
+| Identity | Serial number, unique item | Fungible (any unit is same) |
+| Examples | Multimeter, ladder | Refrigerant gas, filters |
+
+### Why JSON for status_history?
+
+- Single source of truth - no redundant current status fields
+- Complete audit trail in one place
+- Flexible schema for different status types
+- Easy to query last entry for current state
+- Derive maintenance history without separate table
+
+### Why Job Purchases as separate entity?
+
+- Audit trail: Every purchase tied to specific job
+- Receipt storage: Proper documentation for expenses
+- Integration workflow: Review before adding to inventory
+- Cost tracking: Know exactly what each job cost
+
+---
+
+## 9. Conclusion
+
+This schema provides:
+
+1. **Simplicity**: 8 focused tables, no redundancy
+2. **Flexibility**: JSON where beneficial, relational elsewhere
+3. **Traceability**: Every asset usage and purchase linked to job
+4. **Full History**: Fixed asset status changes tracked with user, timestamp, notes
+5. **Integration Workflow**: Purchases reviewed before adding to inventory
+6. **Maintenance Tracking**: `next_maintenance` date + history derivation
+7. **Offline-First**: All data local with sync flags for server
+
+---
+
+*Report generated: November 2024*
+*For: Job Card Management System*
