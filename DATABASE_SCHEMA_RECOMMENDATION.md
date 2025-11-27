@@ -112,6 +112,9 @@ CREATE TABLE job_cards (
     -- Status History (JSON) - all workflow transitions tracked here
     status_history      TEXT NOT NULL,
 
+    -- Travel Metrics
+    travel_distance     REAL,
+
     -- Work Completion
     work_performed      TEXT,
     technician_notes    TEXT,
@@ -122,6 +125,10 @@ CREATE TABLE job_cards (
     before_photos       TEXT,
     after_photos        TEXT,
     other_photos        TEXT,
+
+    -- Customer Feedback (after SIGNED)
+    customer_rating     INTEGER,
+    customer_feedback   TEXT,
 
     -- Follow-up
     requires_follow_up  INTEGER DEFAULT 0,
@@ -150,8 +157,11 @@ CREATE INDEX idx_job_cards_job_number ON job_cards(job_number);
 | `scheduled_date` | YYYY-MM-DD format for date queries |
 | `estimated_duration` | Expected minutes to complete |
 | `status_history` | JSON array - full workflow audit trail (see below) |
+| `travel_distance` | Distance traveled to job site (km) |
 | `customer_signature` | Base64 encoded signature image |
 | `before/after/other_photos` | JSON arrays: [{uri, notes}] |
+| `customer_rating` | Customer rating 1-5 (after SIGNED) |
+| `customer_feedback` | Customer comments/feedback (after SIGNED) |
 | `is_synced` | 0=pending upload, 1=synced to server |
 
 **Status History JSON Structure:**
@@ -277,12 +287,20 @@ CREATE TABLE fixed_assets (
     -- Status History (JSON) - all state changes tracked here
     status_history      TEXT NOT NULL,
 
-    -- Maintenance Scheduling
+    -- Purchase & Warranty
     purchase_date       INTEGER,
+    purchase_cost       REAL,
+    warranty_expiry     INTEGER,
+
+    -- Maintenance Scheduling
     next_maintenance    INTEGER,
 
     -- Notes
     notes               TEXT,
+
+    -- Sync Status
+    is_synced           INTEGER DEFAULT 0,
+    last_synced_at      INTEGER,
 
     -- Metadata
     created_at          INTEGER NOT NULL,
@@ -303,8 +321,12 @@ CREATE INDEX idx_fixed_assets_type ON fixed_assets(asset_type);
 | `model` | Model number/name |
 | `status_history` | JSON array - full audit trail (see below) |
 | `purchase_date` | When asset was acquired (timestamp) |
+| `purchase_cost` | Original cost of the asset |
+| `warranty_expiry` | Warranty end date (timestamp) |
 | `next_maintenance` | Scheduled maintenance date (timestamp) |
 | `notes` | Specs, capacity, special instructions |
+| `is_synced` | 0=pending upload, 1=synced to server |
+| `last_synced_at` | Last successful sync timestamp |
 
 **Status History JSON Structure:**
 ```json
@@ -370,8 +392,15 @@ CREATE TABLE inventory_assets (
     -- Pricing
     unit_cost           REAL,
 
+    -- Storage
+    storage_location    TEXT,
+
     -- Notes
     notes               TEXT,
+
+    -- Sync Status
+    is_synced           INTEGER DEFAULT 0,
+    last_synced_at      INTEGER,
 
     -- Metadata
     created_at          INTEGER NOT NULL,
@@ -391,6 +420,9 @@ CREATE INDEX idx_inventory_category ON inventory_assets(category);
 | `minimum_stock` | Reorder threshold for low-stock alerts |
 | `unit_of_measure` | kg \| piece \| meter \| liter \| roll |
 | `unit_cost` | Cost per unit for job costing |
+| `storage_location` | Where item is stored (e.g., "Van", "Warehouse Shelf A3") |
+| `is_synced` | 0=pending upload, 1=synced to server |
+| `last_synced_at` | Last successful sync timestamp |
 
 **Derived Property:**
 ```kotlin
@@ -414,6 +446,7 @@ CREATE TABLE job_fixed_assets (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     job_id              INTEGER NOT NULL,
     fixed_asset_id      INTEGER NOT NULL,
+    created_at          INTEGER NOT NULL,
 
     FOREIGN KEY (job_id) REFERENCES job_cards(id) ON DELETE CASCADE,
     FOREIGN KEY (fixed_asset_id) REFERENCES fixed_assets(id) ON DELETE RESTRICT
@@ -427,6 +460,7 @@ CREATE INDEX idx_job_fixed_asset ON job_fixed_assets(fixed_asset_id);
 |-------|------|
 | `job_id` | Which job this asset is linked to |
 | `fixed_asset_id` | Which asset was used |
+| `created_at` | When the link was created (audit purposes) |
 
 **Note:** Checkout time, return time, and condition are derived from `fixed_assets.status_history` entries that reference this `job_id`.
 
@@ -442,6 +476,7 @@ CREATE TABLE job_inventory_usage (
     job_id              INTEGER NOT NULL,
     inventory_asset_id  INTEGER NOT NULL,
     quantity_used       REAL NOT NULL,
+    created_at          INTEGER NOT NULL,
 
     FOREIGN KEY (job_id) REFERENCES job_cards(id) ON DELETE CASCADE,
     FOREIGN KEY (inventory_asset_id) REFERENCES inventory_assets(id) ON DELETE RESTRICT
@@ -456,6 +491,7 @@ CREATE INDEX idx_job_inventory_asset ON job_inventory_usage(inventory_asset_id);
 | `job_id` | Which job consumed the item |
 | `inventory_asset_id` | Which inventory item was used |
 | `quantity_used` | Amount consumed (REAL for "1.5 kg") |
+| `created_at` | When usage was recorded (audit purposes) |
 
 **Business Logic:** On insert, decrement `inventory_assets.current_stock` by `quantity_used`.
 
@@ -605,9 +641,9 @@ CREATE INDEX idx_receipts_purchase ON purchase_receipts(purchase_id);
 │  │ name        │         │ customer_name, phone, email                   │   │
 │  │ email       │         │ title, description, job_type, priority        │   │
 │  │ phone       │         │ service_address, lat, lng                     │   │
-│  │ auth_token  │         │ scheduled_date, scheduled_time                │   │
-│  └─────────────┘         │ status_history (JSON)                         │   │
-│                          │ work details, photos, signature               │   │
+│  │ auth_token  │         │ scheduled_date, status_history (JSON)         │   │
+│  └─────────────┘         │ travel_distance, work details, photos         │   │
+│                          │ customer_rating, customer_feedback            │   │
 │                          └──────────────────────────────────────────────┘   │
 │                                          │                                   │
 │                    ┌─────────────────────┼─────────────────────┐            │
@@ -619,8 +655,8 @@ CREATE INDEX idx_receipts_purchase ON purchase_receipts(purchase_id);
 │  │ id (PK)                 │ │ id (PK)                 │ │ id (PK)         ││
 │  │ job_id (FK)             │ │ job_id (FK)             │ │ job_id (FK)     ││
 │  │ fixed_asset_id (FK)     │ │ inventory_asset_id (FK) │ │ item_name       ││
-│  │                         │ │ quantity_used           │ │ quantity, cost  ││
-│  │                         │ │                         │ │ target_type     ││
+│  │ created_at              │ │ quantity_used           │ │ quantity, cost  ││
+│  │                         │ │ created_at              │ │ target_type     ││
 │  │                         │ │                         │ │ is_integrated   ││
 │  └───────────┬─────────────┘ └───────────┬─────────────┘ └────────┬────────┘│
 │              │                           │                        │         │
@@ -633,9 +669,10 @@ CREATE INDEX idx_receipts_purchase ON purchase_receipts(purchase_id);
 │  │ asset_name, asset_type  │ │ item_name, category     │ │ file_path       ││
 │  │ serial, manufacturer    │ │ current_stock           │ │ file_type       ││
 │  │ status_history (JSON)   │ │ minimum_stock           │ │ uploaded_at     ││
-│  │ next_maintenance        │ │ unit_of_measure         │ └─────────────────┘│
-│  └─────────────────────────┘ │ unit_cost               │                    │
-│                              └─────────────────────────┘                    │
+│  │ purchase_cost, warranty │ │ storage_location        │ └─────────────────┘│
+│  │ next_maintenance        │ │ unit_of_measure         │                    │
+│  │ is_synced               │ │ is_synced               │                    │
+│  └─────────────────────────┘ └─────────────────────────┘                    │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
