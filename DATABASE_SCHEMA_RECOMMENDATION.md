@@ -56,7 +56,8 @@ Stores the single logged-in technician. Always exactly 1 record.
 ```sql
 CREATE TABLE technician (
     id                  INTEGER PRIMARY KEY DEFAULT 1,
-    employee_number     TEXT NOT NULL,
+    username            TEXT NOT NULL,
+    password_hash       TEXT NOT NULL,
     name                TEXT NOT NULL,
     email               TEXT NOT NULL,
     phone               TEXT NOT NULL,
@@ -75,7 +76,8 @@ CREATE TABLE technician (
 | Field | Role |
 |-------|------|
 | `id` | Always 1 - enforces single technician |
-| `employee_number` | Links to company HR/payroll system |
+| `username` | Login username |
+| `password_hash` | Hashed password for authentication |
 | `name` | Display name on UI and reports |
 | `specialization` | Skills for job matching (e.g., "AC Installation") |
 | `is_on_duty` | Controls job availability (1=on, 0=off) |
@@ -103,7 +105,6 @@ CREATE TABLE job_cards (
     title               TEXT NOT NULL,
     description         TEXT,
     job_type            TEXT NOT NULL,
-    status              TEXT NOT NULL DEFAULT 'AVAILABLE',
     priority            TEXT DEFAULT 'NORMAL',
 
     -- Location
@@ -116,22 +117,13 @@ CREATE TABLE job_cards (
     scheduled_time      TEXT,
     estimated_duration  INTEGER,
 
-    -- Workflow Timestamps
-    accepted_at         INTEGER,
-    en_route_at         INTEGER,
-    started_at          INTEGER,
-    completed_at        INTEGER,
-    cancelled_at        INTEGER,
-
-    -- Pause Tracking
-    total_paused_ms     INTEGER DEFAULT 0,
-    pause_history       TEXT,
+    -- Status History (JSON) - all workflow transitions tracked here
+    status_history      TEXT NOT NULL,
 
     -- Work Completion
     work_performed      TEXT,
     technician_notes    TEXT,
     issues_encountered  TEXT,
-    cancellation_reason TEXT,
 
     -- Evidence
     customer_signature  TEXT,
@@ -152,7 +144,6 @@ CREATE TABLE job_cards (
     updated_at          INTEGER NOT NULL
 );
 
-CREATE INDEX idx_job_cards_status ON job_cards(status);
 CREATE INDEX idx_job_cards_scheduled_date ON job_cards(scheduled_date);
 CREATE INDEX idx_job_cards_job_number ON job_cards(job_number);
 ```
@@ -163,15 +154,39 @@ CREATE INDEX idx_job_cards_job_number ON job_cards(job_number);
 | `job_number` | Human-readable identifier (e.g., "JC-2024-001") |
 | `customer_*` | Denormalized customer info for offline access |
 | `job_type` | INSTALLATION \| REPAIR \| SERVICE \| INSPECTION |
-| `status` | Current workflow state (see status workflow below) |
 | `priority` | LOW \| NORMAL \| HIGH \| URGENT |
 | `scheduled_date` | YYYY-MM-DD format for date queries |
 | `estimated_duration` | Expected minutes to complete |
-| `total_paused_ms` | Accumulated pause time in milliseconds |
-| `pause_history` | JSON array of pause events with reasons |
+| `status_history` | JSON array - full workflow audit trail (see below) |
 | `customer_signature` | Base64 encoded signature image |
 | `before/after/other_photos` | JSON arrays: [{uri, notes}] |
 | `is_synced` | 0=pending upload, 1=synced to server |
+
+**Status History JSON Structure:**
+```json
+[
+  { "status": "AVAILABLE", "timestamp": 1701000000000 },
+  { "status": "AWAITING", "timestamp": 1701100000000 },
+  { "status": "PENDING", "timestamp": 1701200000000 },
+  { "status": "EN_ROUTE", "timestamp": 1701300000000 },
+  { "status": "BUSY", "timestamp": 1701350000000 },
+  { "status": "PAUSED", "timestamp": 1701400000000, "reason": "Waiting for parts" },
+  { "status": "BUSY", "timestamp": 1701500000000 },
+  { "status": "COMPLETED", "timestamp": 1701600000000 }
+]
+```
+
+**Status Values:**
+| Status | Meaning |
+|--------|---------|
+| `AVAILABLE` | Unassigned, technician can claim |
+| `AWAITING` | Assigned, not yet accepted |
+| `PENDING` | Accepted, scheduled but not started |
+| `EN_ROUTE` | Traveling to job site |
+| `BUSY` | Actively working |
+| `PAUSED` | Work temporarily stopped (reason required) |
+| `COMPLETED` | Job finished successfully |
+| `CANCELLED` | Job cancelled (reason required) |
 
 **Status Workflow:**
 ```
@@ -182,16 +197,55 @@ AVAILABLE → AWAITING → PENDING → EN_ROUTE → BUSY → COMPLETED
 Any status (except COMPLETED) → CANCELLED
 ```
 
-| Status | Meaning |
-|--------|---------|
-| `AVAILABLE` | Unassigned, technician can claim |
-| `AWAITING` | Assigned, not yet accepted |
-| `PENDING` | Accepted, scheduled but not started |
-| `EN_ROUTE` | Traveling to job site |
-| `BUSY` | Actively working |
-| `PAUSED` | Work temporarily stopped |
-| `COMPLETED` | Job finished successfully |
-| `CANCELLED` | Job cancelled (with reason) |
+**Derived Properties (in Domain Model):**
+```kotlin
+// Current status = last entry's status
+val currentStatus: String
+    get() = statusHistory.lastOrNull()?.status ?: "AVAILABLE"
+
+// When was job accepted?
+val acceptedAt: Long?
+    get() = statusHistory.find { it.status == "PENDING" }?.timestamp
+
+// When did technician start traveling?
+val enRouteAt: Long?
+    get() = statusHistory.find { it.status == "EN_ROUTE" }?.timestamp
+
+// When did work start?
+val startedAt: Long?
+    get() = statusHistory.find { it.status == "BUSY" }?.timestamp
+
+// When was job completed?
+val completedAt: Long?
+    get() = statusHistory.find { it.status == "COMPLETED" }?.timestamp
+
+// When was job cancelled?
+val cancelledAt: Long?
+    get() = statusHistory.find { it.status == "CANCELLED" }?.timestamp
+
+// Cancellation reason
+val cancellationReason: String?
+    get() = statusHistory.find { it.status == "CANCELLED" }?.reason
+
+// Total time paused (sum of all pause durations)
+val totalPausedMs: Long
+    get() {
+        var total = 0L
+        val history = statusHistory
+        for (i in history.indices) {
+            if (history[i].status == "PAUSED" && i + 1 < history.size) {
+                total += history[i + 1].timestamp - history[i].timestamp
+            }
+        }
+        return total
+    }
+
+// All pause events with reasons
+val pauseReasons: List<String>
+    get() = statusHistory
+        .filter { it.status == "PAUSED" && it.reason != null }
+        .mapNotNull { it.reason }
+```
 
 ---
 
@@ -246,56 +300,11 @@ CREATE INDEX idx_fixed_assets_type ON fixed_assets(asset_type);
 **Status History JSON Structure:**
 ```json
 [
-  {
-    "status": "AVAILABLE",
-    "previous_status": null,
-    "user_id": 1,
-    "user_name": "Mike Wilson",
-    "timestamp": 1701000000000,
-    "notes": "Initial entry - new asset",
-    "job_id": null,
-    "condition": "GOOD"
-  },
-  {
-    "status": "CHECKED_OUT",
-    "previous_status": "AVAILABLE",
-    "user_id": 1,
-    "user_name": "Mike Wilson",
-    "timestamp": 1701234567890,
-    "notes": "Taking for job JC-2024-052",
-    "job_id": 52,
-    "condition": "GOOD"
-  },
-  {
-    "status": "AVAILABLE",
-    "previous_status": "CHECKED_OUT",
-    "user_id": 1,
-    "user_name": "Mike Wilson",
-    "timestamp": 1701298765432,
-    "notes": "Returned after job completion",
-    "job_id": 52,
-    "condition": "GOOD"
-  },
-  {
-    "status": "IN_MAINTENANCE",
-    "previous_status": "AVAILABLE",
-    "user_id": 1,
-    "user_name": "Mike Wilson",
-    "timestamp": 1701345678900,
-    "notes": "Scheduled calibration",
-    "job_id": null,
-    "condition": null
-  },
-  {
-    "status": "AVAILABLE",
-    "previous_status": "IN_MAINTENANCE",
-    "user_id": 1,
-    "user_name": "Mike Wilson",
-    "timestamp": 1701432109876,
-    "notes": "Calibration complete, certified until 2025-06",
-    "job_id": null,
-    "condition": "GOOD"
-  }
+  { "status": "AVAILABLE", "timestamp": 1701000000000 },
+  { "status": "CHECKED_OUT", "timestamp": 1701234567890, "job_id": 52, "condition": "GOOD" },
+  { "status": "AVAILABLE", "timestamp": 1701298765432, "job_id": 52, "condition": "GOOD" },
+  { "status": "IN_MAINTENANCE", "timestamp": 1701345678900 },
+  { "status": "AVAILABLE", "timestamp": 1701432109876, "condition": "GOOD" }
 ]
 ```
 
@@ -314,20 +323,17 @@ CREATE INDEX idx_fixed_assets_type ON fixed_assets(asset_type);
 val currentStatus: String
     get() = statusHistory.lastOrNull()?.status ?: "AVAILABLE"
 
-// Current holder (only if CHECKED_OUT)
-val currentHolderId: Int?
+// Current job (only if CHECKED_OUT)
+val currentJobId: Int?
     get() = statusHistory.lastOrNull()
-        ?.takeIf { it.status == "CHECKED_OUT" }?.userId
+        ?.takeIf { it.status == "CHECKED_OUT" }?.jobId
 
-val currentHolderName: String?
-    get() = statusHistory.lastOrNull()
-        ?.takeIf { it.status == "CHECKED_OUT" }?.userName
-
-// Last maintenance completed
+// Last maintenance completed (when status changed FROM IN_MAINTENANCE)
 val lastMaintenanceDate: Long?
     get() = statusHistory
-        .filter { it.previousStatus == "IN_MAINTENANCE" && it.status == "AVAILABLE" }
-        .maxOfOrNull { it.timestamp }
+        .zipWithNext()
+        .filter { (prev, curr) -> prev.status == "IN_MAINTENANCE" && curr.status == "AVAILABLE" }
+        .maxOfOrNull { (_, curr) -> curr.timestamp }
 
 // Check if available
 val isAvailable: Boolean
@@ -392,23 +398,13 @@ val isLowStock: Boolean
 
 ### 3.5 JOB_FIXED_ASSETS
 
-Links fixed assets to jobs (checkout/return tracking per job).
+Links fixed assets to jobs. Checkout/return times and conditions are tracked in `fixed_assets.status_history`.
 
 ```sql
 CREATE TABLE job_fixed_assets (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     job_id              INTEGER NOT NULL,
     fixed_asset_id      INTEGER NOT NULL,
-
-    -- Checkout Details
-    checkout_time       INTEGER NOT NULL,
-    return_time         INTEGER,
-
-    -- Condition Tracking
-    checkout_condition  TEXT,
-    return_condition    TEXT,
-    checkout_notes      TEXT,
-    return_notes        TEXT,
 
     FOREIGN KEY (job_id) REFERENCES job_cards(id) ON DELETE CASCADE,
     FOREIGN KEY (fixed_asset_id) REFERENCES fixed_assets(id) ON DELETE RESTRICT
@@ -420,18 +416,10 @@ CREATE INDEX idx_job_fixed_asset ON job_fixed_assets(fixed_asset_id);
 
 | Field | Role |
 |-------|------|
-| `job_id` | Which job this checkout is for |
-| `fixed_asset_id` | Which asset was checked out |
-| `checkout_time` | When taken for job (timestamp) |
-| `return_time` | When returned (null if still out) |
-| `checkout_condition` | GOOD \| FAIR \| POOR - state at checkout |
-| `return_condition` | State when returned |
-| `checkout_notes` | Notes when taking asset |
-| `return_notes` | Issues/notes when returning |
+| `job_id` | Which job this asset is linked to |
+| `fixed_asset_id` | Which asset was used |
 
-**Foreign Key Behavior:**
-- `ON DELETE CASCADE` - Job deletion removes checkout records
-- `ON DELETE RESTRICT` - Cannot delete asset with checkout history
+**Note:** Checkout time, return time, and condition are derived from `fixed_assets.status_history` entries that reference this `job_id`.
 
 ---
 
@@ -444,13 +432,7 @@ CREATE TABLE job_inventory_usage (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     job_id              INTEGER NOT NULL,
     inventory_asset_id  INTEGER NOT NULL,
-
-    -- Usage Details
     quantity_used       REAL NOT NULL,
-    used_at             INTEGER NOT NULL,
-
-    -- Notes
-    notes               TEXT,
 
     FOREIGN KEY (job_id) REFERENCES job_cards(id) ON DELETE CASCADE,
     FOREIGN KEY (inventory_asset_id) REFERENCES inventory_assets(id) ON DELETE RESTRICT
@@ -465,8 +447,6 @@ CREATE INDEX idx_job_inventory_asset ON job_inventory_usage(inventory_asset_id);
 | `job_id` | Which job consumed the item |
 | `inventory_asset_id` | Which inventory item was used |
 | `quantity_used` | Amount consumed (REAL for "1.5 kg") |
-| `used_at` | When consumption was recorded (timestamp) |
-| `notes` | Why/how it was used |
 
 **Business Logic:** On insert, decrement `inventory_assets.current_stock` by `quantity_used`.
 
@@ -612,13 +592,13 @@ CREATE INDEX idx_receipts_purchase ON purchase_receipts(purchase_id);
 │  │ TECHNICIAN  │         │              JOB_CARDS                        │   │
 │  │─────────────│         │──────────────────────────────────────────────│   │
 │  │ id (PK)     │────────►│ id (PK)                                      │   │
-│  │ emp_number  │         │ job_number (UNIQUE)                          │   │
+│  │ username    │         │ job_number (UNIQUE)                          │   │
 │  │ name        │         │ customer_name, phone, email                   │   │
 │  │ email       │         │ title, description, job_type                  │   │
 │  │ phone       │         │ status, priority                              │   │
 │  │ is_on_duty  │         │ service_address, lat, lng                     │   │
 │  │ current_job │         │ scheduled_date, scheduled_time                │   │
-│  └─────────────┘         │ workflow timestamps...                        │   │
+│  └─────────────┘         │ status_history (JSON)                         │   │
 │                          │ work details, photos, signature               │   │
 │                          └──────────────────────────────────────────────┘   │
 │                                          │                                   │
