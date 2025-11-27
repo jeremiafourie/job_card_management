@@ -16,7 +16,10 @@ interface AssetDao {
     fun getAssetsByCategory(category: String): Flow<List<AssetEntity>>
 
     @Query("UPDATE current SET currentStock = currentStock - :quantity WHERE id = :id")
-    suspend fun useAsset(id: Int, quantity: Int)
+    suspend fun useAsset(id: Int, quantity: Double)
+
+    @Query("UPDATE current SET currentStock = currentStock + :quantity WHERE id = :id")
+    suspend fun restoreAsset(id: Int, quantity: Double)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAllAssets(assets: List<AssetEntity>)

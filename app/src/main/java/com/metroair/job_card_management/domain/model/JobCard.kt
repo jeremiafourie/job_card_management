@@ -23,6 +23,8 @@ data class JobCard(
     val endTime: Long? = null,
     val pausedTime: Long? = null,
     val pauseHistory: String? = null,
+    val cancelledAt: Long? = null,
+    val cancellationReason: String? = null,
     val workPerformed: String? = null,
     val technicianNotes: String? = null,
     val issuesEncountered: String? = null,
@@ -34,6 +36,5 @@ data class JobCard(
     val requiresFollowUp: Boolean = false,
     val followUpNotes: String? = null,
     val isSynced: Boolean = false,
-    val isMyJob: Boolean = false,
-    val acceptedByTechnician: Boolean = false
+    val isMyJob: Boolean = false
 )

@@ -5,8 +5,8 @@ data class Asset(
     val itemCode: String,
     val itemName: String,
     val category: String,
-    val currentStock: Int,
-    val minimumStock: Int,
+    val currentStock: Double,
+    val minimumStock: Double,
     val unitOfMeasure: String
 ) {
     val isLowStock: Boolean

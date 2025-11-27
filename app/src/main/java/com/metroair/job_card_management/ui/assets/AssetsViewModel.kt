@@ -153,7 +153,7 @@ class AssetsViewModel @Inject constructor(
     }
 
     // Current Asset operations
-    fun useAsset(assetId: Int, quantity: Int) {
+    fun useAsset(assetId: Int, quantity: Double) {
         viewModelScope.launch {
             assetRepository.useAsset(assetId, quantity)
         }

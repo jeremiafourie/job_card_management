@@ -46,11 +46,11 @@ interface JobCardDao {
            "ORDER BY scheduledDate ASC, scheduledTime ASC")
     fun getAvailableJobs(): Flow<List<JobCardEntity>>
 
-    @Query("UPDATE job_cards SET isMyJob = 1, acceptedByTechnician = 1, acceptedAt = :timestamp, status = 'PENDING', updatedAt = :timestamp " +
+    @Query("UPDATE job_cards SET isMyJob = 1, acceptedAt = :timestamp, status = 'PENDING', updatedAt = :timestamp " +
            "WHERE id = :jobId AND isMyJob = 0")
     suspend fun claimJob(jobId: Int, timestamp: Long): Int
 
-    @Query("UPDATE job_cards SET acceptedByTechnician = 1, acceptedAt = :timestamp, status = 'PENDING', updatedAt = :timestamp " +
+    @Query("UPDATE job_cards SET acceptedAt = :timestamp, status = 'PENDING', updatedAt = :timestamp " +
            "WHERE id = :jobId AND isMyJob = 1 AND status = 'AWAITING'")
     suspend fun acceptJob(jobId: Int, timestamp: Long): Int
 
@@ -68,7 +68,11 @@ interface JobCardDao {
 
     @Query("UPDATE job_cards SET status = 'BUSY', updatedAt = :timestamp " +
            "WHERE id = :id AND isMyJob = 1")
-    suspend fun resumeJob(id: Int, timestamp: Long)
+    suspend fun resumeJobToBusy(id: Int, timestamp: Long)
+
+    @Query("UPDATE job_cards SET status = 'EN_ROUTE', updatedAt = :timestamp " +
+           "WHERE id = :id AND isMyJob = 1")
+    suspend fun resumeJobToEnRoute(id: Int, timestamp: Long)
 
     @Query("UPDATE job_cards SET status = 'COMPLETED', endTime = :endTime, " +
            "workPerformed = :workPerformed, technicianNotes = :notes, " +

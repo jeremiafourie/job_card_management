@@ -56,7 +56,7 @@ class DashboardViewModel @Inject constructor(
 
     // Awaiting jobs - assigned to technician but not yet accepted
     val awaitingJobs: StateFlow<List<JobCard>> = myJobs
-        .map { jobs -> jobs.filter { it.isMyJob && !it.acceptedByTechnician && it.status == JobStatus.PENDING } }
+        .map { jobs -> jobs.filter { it.status == JobStatus.AWAITING } }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -65,7 +65,7 @@ class DashboardViewModel @Inject constructor(
 
     // Pending jobs - accepted by technician but not yet started
     val pendingJobs: StateFlow<List<JobCard>> = myJobs
-        .map { jobs -> jobs.filter { it.isMyJob && it.acceptedByTechnician && it.status == JobStatus.PENDING } }
+        .map { jobs -> jobs.filter { it.status == JobStatus.PENDING } }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -107,7 +107,7 @@ class DashboardViewModel @Inject constructor(
             availableJobs = available.size,
             awaitingJobs = awaiting.size,
             activeJob = myJobsList.count { it.status == JobStatus.BUSY || it.status == JobStatus.EN_ROUTE || it.status == JobStatus.PAUSED },
-            pending = myJobsList.count { it.status == JobStatus.PENDING && it.acceptedByTechnician }
+            pending = myJobsList.count { it.status == JobStatus.PENDING }
         )
     }.stateIn(
         scope = viewModelScope,
@@ -157,6 +157,15 @@ class DashboardViewModel @Inject constructor(
             val success = jobCardRepository.resumeJob(jobId)
             if (!success) {
                 _uiMessage.value = "Cannot resume this job. You must first pause or complete your current busy job."
+            }
+        }
+    }
+
+    fun enRouteJob(jobId: Int) {
+        viewModelScope.launch {
+            val success = jobCardRepository.enRouteJob(jobId)
+            if (!success) {
+                _uiMessage.value = "Cannot set job to en route. You must first pause or complete your current busy job."
             }
         }
     }

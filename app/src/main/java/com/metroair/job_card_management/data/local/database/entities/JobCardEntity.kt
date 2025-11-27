@@ -22,11 +22,10 @@ data class JobCardEntity(
     val customerEmail: String? = null,
     val customerAddress: String,
     val isMyJob: Boolean, // true = assigned to me, false = unassigned/available
-    val acceptedByTechnician: Boolean = false, // true if technician has accepted the assigned job
     val title: String,
     val description: String?,
     val jobType: String, // "INSTALLATION", "REPAIR", "SERVICE", "INSPECTION"
-    val status: String, // "ASSIGNED", "EN_ROUTE", "BUSY", "PAUSED", "COMPLETED", "CANCELLED"
+    val status: String, // "AWAITING", "PENDING", "EN_ROUTE", "BUSY", "PAUSED", "COMPLETED", "CANCELLED"
     val scheduledDate: String?,
     val scheduledTime: String?,
     val estimatedDuration: Int? = null, // Duration in minutes
@@ -40,6 +39,8 @@ data class JobCardEntity(
     val endTime: Long? = null, // When technician completed the job
     val pausedTime: Long? = null, // Total time paused in milliseconds
     val pauseHistory: String? = null, // JSON array of pause events [{timestamp, reason, duration}]
+    val cancelledAt: Long? = null, // When job was cancelled
+    val cancellationReason: String? = null, // Reason for cancellation
     val workPerformed: String? = null,
     val technicianNotes: String? = null,
     val issuesEncountered: String? = null,

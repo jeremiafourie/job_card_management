@@ -34,6 +34,7 @@ interface JobCardRepository {
     suspend fun pauseJob(jobId: Int, reason: String): Boolean
     suspend fun cancelJob(jobId: Int, reason: String): Boolean
     suspend fun resumeJob(jobId: Int): Boolean
+    suspend fun enRouteJob(jobId: Int): Boolean
     suspend fun completeJob(
         jobId: Int,
         workPerformed: String,
@@ -73,6 +74,7 @@ interface JobCardRepository {
 class JobCardRepositoryImpl @Inject constructor(
     private val jobCardDao: JobCardDao,
     private val currentTechnicianDao: CurrentTechnicianDao,
+    private val assetDao: com.metroair.job_card_management.data.local.database.dao.AssetDao,
     @IoDispatcher private val ioDispatcher: CoroutineDispatcher
 ) : JobCardRepository {
 
@@ -213,18 +215,14 @@ class JobCardRepositoryImpl @Inject constructor(
                 return@withContext false
             }
 
-            // Store cancellation reason in technician notes
-            val currentNotes = job.technicianNotes ?: ""
-            val updatedNotes = if (currentNotes.isNotEmpty()) {
-                "$currentNotes\n[CANCELLED: $reason]"
-            } else {
-                "[CANCELLED: $reason]"
-            }
+            val timestamp = System.currentTimeMillis()
 
-            // Update job to cancelled status with reason
+            // Update job to cancelled status with reason and timestamp
             val updatedJob = job.copy(
                 status = "CANCELLED",
-                technicianNotes = updatedNotes
+                cancelledAt = timestamp,
+                cancellationReason = reason,
+                updatedAt = timestamp
             )
             jobCardDao.updateJob(updatedJob)
 
@@ -265,8 +263,9 @@ class JobCardRepositoryImpl @Inject constructor(
                 val pauseStartTime = lastPause.getLong("timestamp")
                 val pauseDuration = resumeTimestamp - pauseStartTime
 
-                // Update the last pause event with calculated duration
+                // Update the last pause event with calculated duration and resume status
                 lastPause.put("duration", pauseDuration)
+                lastPause.put("resumeStatus", "BUSY")
                 pauseHistory.put(lastPauseIndex, lastPause)
 
                 // Calculate total paused time
@@ -282,13 +281,69 @@ class JobCardRepositoryImpl @Inject constructor(
                 jobCardDao.updateJob(updatedJob)
             } else {
                 // No pause history, just resume normally
-                jobCardDao.resumeJob(jobId, resumeTimestamp)
+                jobCardDao.resumeJobToBusy(jobId, resumeTimestamp)
             }
 
             currentTechnicianDao.setCurrentActiveJob(jobId)
             true
         } catch (e: Exception) {
             android.util.Log.e("JobCardRepository", "Error resuming job", e)
+            false
+        }
+    }
+
+    override suspend fun enRouteJob(jobId: Int): Boolean = withContext(ioDispatcher) {
+        try {
+            val job = jobCardDao.getJobById(jobId)
+            if (job == null || !job.isMyJob || job.status != "PAUSED") {
+                return@withContext false
+            }
+
+            // Check if can resume (no other active job)
+            if (!canStartNewJob()) {
+                return@withContext false
+            }
+
+            val resumeTimestamp = System.currentTimeMillis()
+
+            // Update the last pause event with the actual duration
+            val pauseHistory = try {
+                org.json.JSONArray(job.pauseHistory ?: "[]")
+            } catch (e: Exception) {
+                org.json.JSONArray()
+            }
+
+            if (pauseHistory.length() > 0) {
+                val lastPauseIndex = pauseHistory.length() - 1
+                val lastPause = pauseHistory.getJSONObject(lastPauseIndex)
+                val pauseStartTime = lastPause.getLong("timestamp")
+                val pauseDuration = resumeTimestamp - pauseStartTime
+
+                // Update the last pause event with calculated duration and resume status
+                lastPause.put("duration", pauseDuration)
+                lastPause.put("resumeStatus", "EN_ROUTE")
+                pauseHistory.put(lastPauseIndex, lastPause)
+
+                // Calculate total paused time
+                val totalPausedTime = (job.pausedTime ?: 0L) + pauseDuration
+
+                // Update job with new pause history and total paused time
+                val updatedJob = job.copy(
+                    status = "EN_ROUTE",
+                    pauseHistory = pauseHistory.toString(),
+                    pausedTime = totalPausedTime,
+                    updatedAt = resumeTimestamp
+                )
+                jobCardDao.updateJob(updatedJob)
+            } else {
+                // No pause history, just resume normally
+                jobCardDao.resumeJobToEnRoute(jobId, resumeTimestamp)
+            }
+
+            currentTechnicianDao.setCurrentActiveJob(jobId)
+            true
+        } catch (e: Exception) {
+            android.util.Log.e("JobCardRepository", "Error setting job to en route", e)
             false
         }
     }
@@ -312,6 +367,23 @@ class JobCardRepositoryImpl @Inject constructor(
                 followUpNotes = followUpNotes,
                 timestamp = System.currentTimeMillis()
             )
+
+            // Deduct resources from stock now that job is completed
+            if (!resourcesUsed.isNullOrBlank()) {
+                try {
+                    val jsonArray = org.json.JSONArray(resourcesUsed)
+                    for (i in 0 until jsonArray.length()) {
+                        val resource = jsonArray.getJSONObject(i)
+                        val resourceId = resource.getInt("id")
+                        val quantity = resource.getDouble("quantity")
+                        // Deduct the quantity from current stock
+                        assetDao.useAsset(resourceId, quantity)
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("JobCardRepository", "Error deducting resources from stock", e)
+                    // Don't fail the job completion if resource deduction fails
+                }
+            }
 
             // Clear technician's current active job
             currentTechnicianDao.setCurrentActiveJob(null)
@@ -744,6 +816,8 @@ class JobCardRepositoryImpl @Inject constructor(
             endTime = endTime,
             pausedTime = pausedTime,
             pauseHistory = pauseHistory,
+            cancelledAt = cancelledAt,
+            cancellationReason = cancellationReason,
             workPerformed = workPerformed,
             technicianNotes = technicianNotes,
             issuesEncountered = issuesEncountered,
@@ -755,8 +829,7 @@ class JobCardRepositoryImpl @Inject constructor(
             requiresFollowUp = requiresFollowUp,
             followUpNotes = followUpNotes,
             isSynced = isSynced,
-            isMyJob = isMyJob,
-            acceptedByTechnician = acceptedByTechnician
+            isMyJob = isMyJob
         )
     }
 }

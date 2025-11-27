@@ -133,6 +133,15 @@ class JobDetailViewModel @Inject constructor(
         }
     }
 
+    fun enRouteJob() {
+        viewModelScope.launch {
+            val success = jobCardRepository.enRouteJob(jobId)
+            if (!success) {
+                _uiState.update { it.copy(errorMessage = "Cannot set job to en route. You may already have an active job.") }
+            }
+        }
+    }
+
     fun saveJobDetails() {
         viewModelScope.launch {
             val state = _uiState.value
@@ -189,40 +198,53 @@ class JobDetailViewModel @Inject constructor(
 
     // Resource management
     fun addResource(itemName: String, itemCode: String, quantity: Double) {
-        _uiState.update { state ->
-            val currentResources = state.resources.toMutableList()
+        viewModelScope.launch {
+            val currentResources = _uiState.value.resources.toMutableList()
             // Check if resource already exists, if so update quantity
             val existingIndex = currentResources.indexOfFirst { it.itemCode == itemCode }
-            if (existingIndex >= 0) {
-                val existing = currentResources[existingIndex]
-                currentResources[existingIndex] = existing.copy(
-                    quantity = existing.quantity + quantity
-                )
-            } else {
-                // Find unit from available resources
-                viewModelScope.launch {
-                    assetRepository.getAllAssets().first().find { it.itemCode == itemCode }?.let { resource ->
-                        currentResources.add(
-                            JobResource(
-                                resourceId = resource.id,
-                                itemName = itemName,
-                                itemCode = itemCode,
-                                quantity = quantity,
-                                unit = resource.unitOfMeasure
-                            )
+
+            // Find the asset to get ID and unit (but don't deduct stock yet)
+            assetRepository.getAllAssets().first().find { it.itemCode == itemCode }?.let { asset ->
+                if (existingIndex >= 0) {
+                    val existing = currentResources[existingIndex]
+                    currentResources[existingIndex] = existing.copy(
+                        quantity = existing.quantity + quantity
+                    )
+                } else {
+                    currentResources.add(
+                        JobResource(
+                            resourceId = asset.id,
+                            itemName = itemName,
+                            itemCode = itemCode,
+                            quantity = quantity,
+                            unit = asset.unitOfMeasure
                         )
-                        _uiState.update { it.copy(resources = currentResources) }
-                    }
+                    )
                 }
-                return@update state
+                _uiState.update { it.copy(resources = currentResources) }
+
+                // Persist to database
+                val resourcesJson = resourcesToJson(currentResources)
+                jobCardRepository.updateJobAssets(jobId, resourcesJson)
             }
-            state.copy(resources = currentResources)
         }
     }
 
     fun removeResource(itemCode: String) {
-        _uiState.update { state ->
-            state.copy(resources = state.resources.filter { it.itemCode != itemCode })
+        viewModelScope.launch {
+            // Remove from UI state
+            val updatedResources = _uiState.value.resources.filter { it.itemCode != itemCode }
+            _uiState.update { state ->
+                state.copy(resources = updatedResources)
+            }
+
+            // Persist to database
+            val resourcesJson = if (updatedResources.isEmpty()) {
+                null
+            } else {
+                resourcesToJson(updatedResources)
+            }
+            jobCardRepository.updateJobAssets(jobId, resourcesJson ?: "")
         }
     }
 

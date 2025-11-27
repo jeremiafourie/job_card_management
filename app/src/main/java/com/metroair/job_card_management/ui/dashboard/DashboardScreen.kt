@@ -121,6 +121,7 @@ fun DashboardScreen(
                     onStartClick = { viewModel.startJob(job.id) },
                     onPauseClick = { reason -> viewModel.pauseJob(job.id, reason) },
                     onResumeClick = { viewModel.resumeJob(job.id) },
+                    onEnRouteClick = { viewModel.enRouteJob(job.id) },
                     onCancelClick = { reason -> viewModel.cancelJob(job.id, reason) },
                     onCompleteClick = { navController.navigate("jobDetail/${job.id}") },
                     onPhotoClick = {
@@ -151,6 +152,7 @@ fun DashboardScreen(
                 PausedJobListItem(
                     job = job,
                     onResumeClick = { viewModel.resumeJob(job.id) },
+                    onEnRouteClick = { viewModel.enRouteJob(job.id) },
                     onClick = { navController.navigate("jobDetail/${job.id}") }
                 )
             }
@@ -247,6 +249,7 @@ fun CurrentJobCard(
     onStartClick: () -> Unit,
     onPauseClick: (String) -> Unit,
     onResumeClick: () -> Unit,
+    onEnRouteClick: () -> Unit,
     onCancelClick: (String) -> Unit,
     onCompleteClick: () -> Unit,
     onPhotoClick: () -> Unit,
@@ -498,19 +501,31 @@ fun CurrentJobCard(
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        if (job.status == JobStatus.BUSY || job.status == JobStatus.PAUSED) {
+                        if (job.status == JobStatus.BUSY) {
                             OutlinedIconButton(
-                                onClick = {
-                                    if (job.status == JobStatus.PAUSED) {
-                                        onResumeClick()
-                                    } else {
-                                        showPauseDialog = true
-                                    }
-                                }
+                                onClick = { showPauseDialog = true }
                             ) {
                                 Icon(
-                                    if (job.status == JobStatus.PAUSED) Icons.Default.PlayArrow else Icons.Default.Pause,
-                                    contentDescription = if (job.status == JobStatus.PAUSED) "Resume" else "Pause"
+                                    Icons.Default.Pause,
+                                    contentDescription = "Pause"
+                                )
+                            }
+                        }
+                        if (job.status == JobStatus.PAUSED) {
+                            OutlinedIconButton(
+                                onClick = onEnRouteClick
+                            ) {
+                                Icon(
+                                    Icons.Default.DirectionsCar,
+                                    contentDescription = "En Route"
+                                )
+                            }
+                            OutlinedIconButton(
+                                onClick = onResumeClick
+                            ) {
+                                Icon(
+                                    Icons.Default.PlayArrow,
+                                    contentDescription = "Resume"
                                 )
                             }
                         }
@@ -692,6 +707,7 @@ fun AwaitingJobListItem(
 fun PausedJobListItem(
     job: JobCard,
     onResumeClick: () -> Unit,
+    onEnRouteClick: () -> Unit,
     onClick: () -> Unit
 ) {
     Card(
@@ -740,17 +756,36 @@ fun PausedJobListItem(
                         )
                     }
                 }
-                Button(
-                    onClick = onResumeClick,
-                    modifier = Modifier.padding(start = 8.dp)
+                Column(
+                    modifier = Modifier.padding(start = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Icon(
-                        Icons.Default.PlayArrow,
-                        contentDescription = "Resume",
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Text("Resume")
+                    OutlinedButton(
+                        onClick = onEnRouteClick,
+                        modifier = Modifier.height(32.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.DirectionsCar,
+                            contentDescription = "En Route",
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text("En Route", style = MaterialTheme.typography.labelSmall)
+                    }
+                    Button(
+                        onClick = onResumeClick,
+                        modifier = Modifier.height(32.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.PlayArrow,
+                            contentDescription = "Resume",
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text("Resume", style = MaterialTheme.typography.labelSmall)
+                    }
                 }
             }
         }

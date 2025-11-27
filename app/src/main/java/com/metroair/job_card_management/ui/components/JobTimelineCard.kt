@@ -31,6 +31,13 @@ data class TimelineEvent(
     val details: String? = null
 )
 
+data class PauseEvent(
+    val timestamp: Long,
+    val reason: String,
+    val duration: Long?,
+    val resumeStatus: String?
+)
+
 @Composable
 fun JobTimelineCard(
     job: JobCard,
@@ -70,7 +77,7 @@ fun JobTimelineCard(
                 }
 
                 // Time spent on job
-                if (job.status == JobStatus.BUSY || job.status == JobStatus.PAUSED || job.status == JobStatus.COMPLETED) {
+                if (job.status == JobStatus.BUSY || job.status == JobStatus.PAUSED || job.status == JobStatus.COMPLETED || job.status == JobStatus.CANCELLED) {
                     Spacer(modifier = Modifier.height(16.dp))
                     Divider()
                     Spacer(modifier = Modifier.height(16.dp))
@@ -254,28 +261,35 @@ private fun buildTimelineEvents(job: JobCard): List<TimelineEvent> {
 
     // Pause and Resume events from history
     val pauseEvents = parsePauseHistory(job.pauseHistory)
-    pauseEvents.forEach { (timestamp, reason, duration) ->
+    pauseEvents.forEach { pauseEvent ->
         // Add pause event
         events.add(
             TimelineEvent(
                 title = "Job Paused",
-                timestamp = timestamp,
+                timestamp = pauseEvent.timestamp,
                 icon = Icons.Default.Pause,
                 color = Color(0xFFFF9800),
-                details = reason,
-                duration = duration?.let { "Paused for: ${formatDuration(it)}" }
+                details = pauseEvent.reason,
+                duration = pauseEvent.duration?.let { "Paused for: ${formatDuration(it)}" }
             )
         )
 
         // Add resume event if pause has completed (duration > 0)
-        duration?.let { pauseDuration ->
+        pauseEvent.duration?.let { pauseDuration ->
             if (pauseDuration > 0) {
+                // Determine title and icon based on resume status
+                val (title, icon) = when (pauseEvent.resumeStatus) {
+                    "BUSY" -> Pair("Work Resumed", Icons.Default.PlayArrow)
+                    "EN_ROUTE" -> Pair("En Route to Location", Icons.Default.DirectionsCar)
+                    else -> Pair("En Route to Location", Icons.Default.DirectionsCar) // Default for backward compatibility
+                }
+
                 events.add(
                     TimelineEvent(
-                        title = "Work Resumed",
-                        timestamp = timestamp + pauseDuration,
-                        icon = Icons.Default.PlayArrow,
-                        color = Color(0xFF2196F3)
+                        title = title,
+                        timestamp = pauseEvent.timestamp + pauseDuration,
+                        icon = icon,
+                        color = if (pauseEvent.resumeStatus == "BUSY") Color(0xFF2196F3) else Color(0xFF9C27B0)
                     )
                 )
             }
@@ -301,10 +315,10 @@ private fun buildTimelineEvents(job: JobCard): List<TimelineEvent> {
         events.add(
             TimelineEvent(
                 title = "Job Cancelled",
-                timestamp = now,
+                timestamp = job.cancelledAt ?: now,
                 icon = Icons.Default.Cancel,
                 color = Color(0xFFF44336),
-                details = extractCancellationReason(job.technicianNotes)
+                details = job.cancellationReason
             )
         )
     }
@@ -312,17 +326,18 @@ private fun buildTimelineEvents(job: JobCard): List<TimelineEvent> {
     return events.sortedBy { it.timestamp }
 }
 
-private fun parsePauseHistory(pauseHistory: String?): List<Triple<Long, String, Long?>> {
+private fun parsePauseHistory(pauseHistory: String?): List<PauseEvent> {
     if (pauseHistory == null) return emptyList()
 
     return try {
         val jsonArray = org.json.JSONArray(pauseHistory)
         (0 until jsonArray.length()).map { index ->
             val pauseEvent = jsonArray.getJSONObject(index)
-            Triple(
-                pauseEvent.getLong("timestamp"),
-                pauseEvent.getString("reason"),
-                pauseEvent.optLong("duration", 0L).takeIf { it > 0 }
+            PauseEvent(
+                timestamp = pauseEvent.getLong("timestamp"),
+                reason = pauseEvent.getString("reason"),
+                duration = pauseEvent.optLong("duration", 0L).takeIf { it > 0 },
+                resumeStatus = pauseEvent.optString("resumeStatus", null).takeIf { !it.isNullOrEmpty() }
             )
         }
     } catch (e: Exception) {
@@ -339,7 +354,11 @@ private fun extractCancellationReason(technicianNotes: String?): String? {
 
 private fun calculateActiveWorkTime(job: JobCard): String {
     val startTime = job.startTime ?: return "0h 0m"
-    val endTime = job.endTime ?: System.currentTimeMillis()
+    val endTime = when {
+        job.status == JobStatus.COMPLETED && job.endTime != null -> job.endTime
+        job.status == JobStatus.CANCELLED && job.cancelledAt != null -> job.cancelledAt
+        else -> System.currentTimeMillis()
+    }
 
     val totalDuration = endTime - startTime
     val pausedTime = job.pausedTime ?: 0L

@@ -19,9 +19,6 @@ class JobsViewModel @Inject constructor(
     private val _selectedStatus = MutableStateFlow<JobStatus?>(null)
     val selectedStatus: StateFlow<JobStatus?> = _selectedStatus.asStateFlow()
 
-    private val _isAwaitingFilter = MutableStateFlow(false)
-    val isAwaitingFilter: StateFlow<Boolean> = _isAwaitingFilter.asStateFlow()
-
     private val _isActiveFilter = MutableStateFlow(false)
     val isActiveFilter: StateFlow<Boolean> = _isActiveFilter.asStateFlow()
 
@@ -30,7 +27,6 @@ class JobsViewModel @Inject constructor(
         val statusParam = savedStateHandle.get<String>("status")
         if (statusParam != null && statusParam != "null") {
             when (statusParam) {
-                "AWAITING" -> _isAwaitingFilter.value = true
                 "ACTIVE" -> _isActiveFilter.value = true
                 else -> {
                     try {
@@ -82,9 +78,8 @@ class JobsViewModel @Inject constructor(
             myJobs,
             availableJobs,
             _selectedStatus,
-            _isAwaitingFilter,
             _searchQuery
-        ) { myJobsList, availableJobsList, statusFilter, awaitingFilter, query ->
+        ) { myJobsList, availableJobsList, statusFilter, query ->
             // Combine all jobs
             val allJobs = myJobsList + availableJobsList
 
@@ -101,12 +96,8 @@ class JobsViewModel @Inject constructor(
                 allJobs
             }
 
-            // Apply awaiting filter (jobs in AWAITING status)
-            if (awaitingFilter) {
-                baseList = baseList.filter { it.status == JobStatus.AWAITING }
-            }
             // Apply status filter
-            else if (statusFilter != null) {
+            if (statusFilter != null) {
                 baseList = baseList.filter { it.status == statusFilter }
             }
 
@@ -125,25 +116,16 @@ class JobsViewModel @Inject constructor(
 
     fun filterByStatus(status: JobStatus?) {
         _selectedStatus.value = status
-        _isAwaitingFilter.value = false
         _isActiveFilter.value = false
-    }
-
-    fun filterByAwaiting() {
-        _isAwaitingFilter.value = true
-        _isActiveFilter.value = false
-        _selectedStatus.value = null
     }
 
     fun filterByActive() {
         _isActiveFilter.value = true
-        _isAwaitingFilter.value = false
         _selectedStatus.value = null
     }
 
     fun clearFilters() {
         _selectedStatus.value = null
-        _isAwaitingFilter.value = false
         _isActiveFilter.value = false
     }
 
@@ -178,6 +160,15 @@ class JobsViewModel @Inject constructor(
             val success = jobCardRepository.resumeJob(jobId)
             if (!success) {
                 _uiMessage.value = "Cannot resume this job. You must first pause or complete your current busy job."
+            }
+        }
+    }
+
+    fun enRouteJob(jobId: Int) {
+        viewModelScope.launch {
+            val success = jobCardRepository.enRouteJob(jobId)
+            if (!success) {
+                _uiMessage.value = "Cannot set job to en route. You must first pause or complete your current busy job."
             }
         }
     }

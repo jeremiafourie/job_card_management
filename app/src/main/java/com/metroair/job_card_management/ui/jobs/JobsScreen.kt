@@ -28,7 +28,6 @@ fun JobsScreen(
 ) {
     val jobs by viewModel.filteredJobs.collectAsStateWithLifecycle()
     val selectedStatus by viewModel.selectedStatus.collectAsStateWithLifecycle()
-    val isAwaitingFilter by viewModel.isAwaitingFilter.collectAsStateWithLifecycle()
     val isActiveFilter by viewModel.isActiveFilter.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val uiMessage by viewModel.uiMessage.collectAsStateWithLifecycle()
@@ -93,25 +92,12 @@ fun JobsScreen(
                 ) {
                     item {
                         FilterChip(
-                            selected = selectedStatus == null && !isAwaitingFilter && !isActiveFilter,
+                            selected = selectedStatus == null && !isActiveFilter,
                             onClick = { viewModel.clearFilters() },
                             label = { Text("All Status") },
-                            leadingIcon = if (selectedStatus == null && !isAwaitingFilter && !isActiveFilter) {
+                            leadingIcon = if (selectedStatus == null && !isActiveFilter) {
                                 { Icon(Icons.Default.Check, contentDescription = null, Modifier.size(18.dp)) }
                             } else null
-                        )
-                    }
-                    item {
-                        FilterChip(
-                            selected = isAwaitingFilter,
-                            onClick = { viewModel.filterByAwaiting() },
-                            label = { Text("Awaiting") },
-                            leadingIcon = if (isAwaitingFilter) {
-                                { Icon(Icons.Default.Check, contentDescription = null, Modifier.size(18.dp)) }
-                            } else null,
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.tertiaryContainer
-                            )
                         )
                     }
                     item {
@@ -204,6 +190,7 @@ fun JobsScreen(
                                     showPauseDialog = true
                                 }
                                 "resume" -> viewModel.resumeJob(job.id)
+                                "enroute" -> viewModel.enRouteJob(job.id)
                                 "claim" -> viewModel.claimJob(job.id)
                                 else -> {}
                             }
@@ -574,13 +561,26 @@ fun JobCard(
                     }
                 }
                 JobStatus.PAUSED -> {
-                    Button(
-                        onClick = { onStatusChange("resume") },
-                        modifier = Modifier.fillMaxWidth()
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(Icons.Default.PlayArrow, null, Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Resume Work")
+                        OutlinedButton(
+                            onClick = { onStatusChange("enroute") },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.DirectionsCar, null, Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("En Route")
+                        }
+                        Button(
+                            onClick = { onStatusChange("resume") },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.PlayArrow, null, Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Resume")
+                        }
                     }
                 }
                 else -> {}

@@ -16,7 +16,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 enum class PhotoCategory {
-    BEFORE, AFTER, OTHER
+    BEFORE, OTHER, AFTER
 }
 
 data class CategorizedPhoto(
@@ -255,19 +255,6 @@ fun PhotoCategoryDialog(
                     }
 
                     Button(
-                        onClick = { selectedCategory = PhotoCategory.AFTER },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                    ) {
-                        Icon(Icons.Default.CheckCircle, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("After Work Completed")
-                    }
-
-                    Button(
                         onClick = { selectedCategory = PhotoCategory.OTHER },
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(
@@ -278,6 +265,19 @@ fun PhotoCategoryDialog(
                         Icon(Icons.Default.Photo, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Other / During Work")
+                    }
+
+                    Button(
+                        onClick = { selectedCategory = PhotoCategory.AFTER },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    ) {
+                        Icon(Icons.Default.CheckCircle, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("After Work Completed")
                     }
                 } else {
                     Text("Add optional notes for this photo:")

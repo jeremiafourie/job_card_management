@@ -34,7 +34,7 @@ import java.time.LocalDate
         FixedEntity::class,
         FixedCheckoutEntity::class
     ],
-    version = 11, // Added Asset and Fixed management entities
+    version = 13, // Changed current asset quantities from Int to Double (INTEGER to REAL)
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -175,7 +175,7 @@ abstract class JobCardDatabase : RoomDatabase() {
                     startTime = System.currentTimeMillis() - 3600000, // Started 1 hour ago
                     isSynced = false
                 ),
-                // My assigned job for later today
+                // My awaiting job - assigned but not yet accepted
                 JobCardEntity(
                     id = 1002,
                     jobNumber = "JOB002",
@@ -188,7 +188,7 @@ abstract class JobCardDatabase : RoomDatabase() {
                     title = "AC Not Cooling - Urgent",
                     description = "Unit not cooling, possible gas leak",
                     jobType = "REPAIR",
-                    status = "PENDING",
+                    status = "AWAITING",
                     scheduledDate = today,
                     scheduledTime = "14:00",
                     estimatedDuration = 90,
@@ -197,7 +197,7 @@ abstract class JobCardDatabase : RoomDatabase() {
                     longitude = 28.0398,
                     isSynced = false
                 ),
-                // My job for tomorrow
+                // My pending job - accepted and ready to start
                 JobCardEntity(
                     id = 1003,
                     jobNumber = "JOB003",
@@ -329,8 +329,8 @@ abstract class JobCardDatabase : RoomDatabase() {
                     itemCode = "GAS-R410A",
                     itemName = "R410A Refrigerant Gas",
                     category = "Consumables",
-                    currentStock = 15,
-                    minimumStock = 5,
+                    currentStock = 15.5,
+                    minimumStock = 5.0,
                     unitOfMeasure = "kg"
                 ),
                 AssetEntity(
@@ -338,8 +338,8 @@ abstract class JobCardDatabase : RoomDatabase() {
                     itemCode = "FILTER-UNI",
                     itemName = "Universal AC Filter",
                     category = "Parts",
-                    currentStock = 25,
-                    minimumStock = 10,
+                    currentStock = 25.0,
+                    minimumStock = 10.0,
                     unitOfMeasure = "piece"
                 ),
                 AssetEntity(
@@ -347,8 +347,8 @@ abstract class JobCardDatabase : RoomDatabase() {
                     itemCode = "PIPE-COPPER-15",
                     itemName = "Copper Pipe 15mm",
                     category = "Parts",
-                    currentStock = 50,
-                    minimumStock = 20,
+                    currentStock = 50.75,
+                    minimumStock = 20.0,
                     unitOfMeasure = "meter"
                 ),
                 AssetEntity(
@@ -356,8 +356,8 @@ abstract class JobCardDatabase : RoomDatabase() {
                     itemCode = "BRACKET-WALL",
                     itemName = "Wall Mounting Bracket",
                     category = "Parts",
-                    currentStock = 8,
-                    minimumStock = 5,
+                    currentStock = 8.0,
+                    minimumStock = 5.0,
                     unitOfMeasure = "set"
                 ),
                 AssetEntity(
@@ -365,8 +365,8 @@ abstract class JobCardDatabase : RoomDatabase() {
                     itemCode = "CAPACITOR-35UF",
                     itemName = "Capacitor 35uF",
                     category = "Parts",
-                    currentStock = 12,
-                    minimumStock = 5,
+                    currentStock = 12.0,
+                    minimumStock = 5.0,
                     unitOfMeasure = "piece"
                 ),
                 AssetEntity(
@@ -374,8 +374,8 @@ abstract class JobCardDatabase : RoomDatabase() {
                     itemCode = "TOOL-GAUGE",
                     itemName = "Manifold Gauge Set",
                     category = "Tools",
-                    currentStock = 3,
-                    minimumStock = 2,
+                    currentStock = 3.0,
+                    minimumStock = 2.0,
                     unitOfMeasure = "set"
                 ),
                 AssetEntity(
@@ -383,8 +383,8 @@ abstract class JobCardDatabase : RoomDatabase() {
                     itemCode = "CLEANER-COIL",
                     itemName = "Coil Cleaning Solution",
                     category = "Consumables",
-                    currentStock = 10,
-                    minimumStock = 3,
+                    currentStock = 10.25,
+                    minimumStock = 3.0,
                     unitOfMeasure = "bottle"
                 ),
                 AssetEntity(
@@ -392,8 +392,8 @@ abstract class JobCardDatabase : RoomDatabase() {
                     itemCode = "TAPE-INSUL",
                     itemName = "Insulation Tape",
                     category = "Consumables",
-                    currentStock = 20,
-                    minimumStock = 10,
+                    currentStock = 20.0,
+                    minimumStock = 10.0,
                     unitOfMeasure = "roll"
                 )
             )

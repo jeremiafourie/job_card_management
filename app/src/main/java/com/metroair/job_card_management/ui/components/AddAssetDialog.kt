@@ -241,7 +241,7 @@ fun AddAssetDialog(
                     }
                 },
                 enabled = selectedAsset != null &&
-                         quantity.toDoubleOrNull()?.let { it > 0 && it <= (selectedAsset?.currentStock ?: 0) } == true
+                         quantity.toDoubleOrNull()?.let { it > 0 && it <= (selectedAsset?.currentStock ?: 0.0) } == true
             ) {
                 Icon(Icons.Default.Add, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))

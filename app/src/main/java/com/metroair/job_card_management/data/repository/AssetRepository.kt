@@ -18,7 +18,8 @@ import javax.inject.Singleton
 interface AssetRepository {
     fun getAllAssets(): Flow<List<Asset>>
     fun getAssetsByCategory(category: String): Flow<List<Asset>>
-    suspend fun useAsset(assetId: Int, quantity: Int)
+    suspend fun useAsset(assetId: Int, quantity: Double)
+    suspend fun restoreAsset(assetId: Int, quantity: Double)
     suspend fun checkoutTool(toolId: Int, itemName: String, itemCode: String): Boolean
     suspend fun returnTool(checkoutId: Int): Boolean
     fun getActiveToolCheckouts(): Flow<List<ToolCheckoutEntity>>
@@ -66,9 +67,15 @@ class AssetRepositoryImpl @Inject constructor(
             }
             .flowOn(ioDispatcher)
 
-    override suspend fun useAsset(assetId: Int, quantity: Int) {
+    override suspend fun useAsset(assetId: Int, quantity: Double) {
         withContext(ioDispatcher) {
             assetDao.useAsset(assetId, quantity)
+        }
+    }
+
+    override suspend fun restoreAsset(assetId: Int, quantity: Double) {
+        withContext(ioDispatcher) {
+            assetDao.restoreAsset(assetId, quantity)
         }
     }
 

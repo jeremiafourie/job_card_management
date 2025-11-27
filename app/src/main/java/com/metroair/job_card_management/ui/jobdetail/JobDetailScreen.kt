@@ -565,13 +565,6 @@ fun JobDetailScreen(
                         }
                     }
 
-                    // Timeline Card
-                    if (job.status != JobStatus.PENDING && job.status != JobStatus.AWAITING) {
-                        item {
-                            JobTimelineCard(job = job)
-                        }
-                    }
-
                     // Follow-up Section
                     item {
                         Card(
@@ -662,6 +655,13 @@ fun JobDetailScreen(
                     }
                 }
 
+                // Timeline Card - Show for jobs that have been started or cancelled
+                if (job.status != JobStatus.PENDING && job.status != JobStatus.AWAITING && job.status != JobStatus.AVAILABLE) {
+                    item {
+                        JobTimelineCard(job = job)
+                    }
+                }
+
                 // Action Buttons
                 item {
                     when (job.status) {
@@ -722,13 +722,26 @@ fun JobDetailScreen(
                             }
                         }
                         JobStatus.PAUSED -> {
-                            Button(
-                                onClick = { viewModel.resumeJob() },
-                                modifier = Modifier.fillMaxWidth()
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Icon(Icons.Default.PlayArrow, contentDescription = null)
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Resume Work")
+                                OutlinedButton(
+                                    onClick = { viewModel.enRouteJob() },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Icons.Default.DirectionsCar, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("En Route")
+                                }
+                                Button(
+                                    onClick = { viewModel.resumeJob() },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Icons.Default.PlayArrow, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Resume")
+                                }
                             }
                         }
                         else -> { /* No actions for other statuses */ }
