@@ -57,16 +57,10 @@ Stores the single logged-in technician. Always exactly 1 record.
 CREATE TABLE technician (
     id                  INTEGER PRIMARY KEY DEFAULT 1,
     username            TEXT NOT NULL,
-    password_hash       TEXT NOT NULL,
     name                TEXT NOT NULL,
     email               TEXT NOT NULL,
     phone               TEXT NOT NULL,
-    specialization      TEXT,
-    profile_photo_path  TEXT,
     auth_token          TEXT,
-    is_on_duty          INTEGER DEFAULT 1,
-    current_job_id      INTEGER,
-    login_time          INTEGER,
     last_sync_time      INTEGER,
     created_at          INTEGER NOT NULL,
     updated_at          INTEGER NOT NULL
@@ -77,12 +71,10 @@ CREATE TABLE technician (
 |-------|------|
 | `id` | Always 1 - enforces single technician |
 | `username` | Login username |
-| `password_hash` | Hashed password for authentication |
 | `name` | Display name on UI and reports |
-| `specialization` | Skills for job matching (e.g., "AC Installation") |
-| `is_on_duty` | Controls job availability (1=on, 0=off) |
-| `current_job_id` | Quick reference to active BUSY job |
-| `auth_token` | API authentication for future server sync |
+| `email` | Contact email |
+| `phone` | Contact phone number |
+| `auth_token` | API authentication for server sync |
 | `last_sync_time` | Track when data was last synced to server |
 
 ---
@@ -172,7 +164,8 @@ CREATE INDEX idx_job_cards_job_number ON job_cards(job_number);
   { "status": "BUSY", "timestamp": 1701350000000 },
   { "status": "PAUSED", "timestamp": 1701400000000, "reason": "Waiting for parts" },
   { "status": "BUSY", "timestamp": 1701500000000 },
-  { "status": "COMPLETED", "timestamp": 1701600000000 }
+  { "status": "COMPLETED", "timestamp": 1701600000000 },
+  { "status": "SIGNED", "timestamp": 1701650000000, "signed_by": "John Smith" }
 ]
 ```
 
@@ -185,17 +178,21 @@ CREATE INDEX idx_job_cards_job_number ON job_cards(job_number);
 | `EN_ROUTE` | Traveling to job site |
 | `BUSY` | Actively working |
 | `PAUSED` | Work temporarily stopped (reason required) |
-| `COMPLETED` | Job finished successfully |
+| `COMPLETED` | Job finished, awaiting customer signature |
+| `SIGNED` | Customer signed, job finalized (read-only) |
 | `CANCELLED` | Job cancelled (reason required) |
 
 **Status Workflow:**
 ```
-AVAILABLE → AWAITING → PENDING → EN_ROUTE → BUSY → COMPLETED
-                                    ↕         ↕
-                                  PAUSED ←→ PAUSED
+AVAILABLE → AWAITING → PENDING → EN_ROUTE → BUSY → COMPLETED → SIGNED
+                                    ↕         ↕         ↓
+                                  PAUSED ←→ PAUSED    (if already signed,
+                                                       skip to SIGNED)
 
-Any status (except COMPLETED) → CANCELLED
+Any status (except COMPLETED/SIGNED) → CANCELLED
 ```
+
+**Note:** Once a job reaches `SIGNED` status, its details cannot be modified. If the customer has already signed (`customer_signature` is set) when the technician marks the job as COMPLETED, it automatically transitions to SIGNED.
 
 **Derived Properties (in Domain Model):**
 ```kotlin
@@ -219,6 +216,14 @@ val startedAt: Long?
 val completedAt: Long?
     get() = statusHistory.find { it.status == "COMPLETED" }?.timestamp
 
+// When was job signed?
+val signedAt: Long?
+    get() = statusHistory.find { it.status == "SIGNED" }?.timestamp
+
+// Who signed the job?
+val signedBy: String?
+    get() = statusHistory.find { it.status == "SIGNED" }?.signedBy
+
 // When was job cancelled?
 val cancelledAt: Long?
     get() = statusHistory.find { it.status == "CANCELLED" }?.timestamp
@@ -226,6 +231,10 @@ val cancelledAt: Long?
 // Cancellation reason
 val cancellationReason: String?
     get() = statusHistory.find { it.status == "CANCELLED" }?.reason
+
+// Is job finalized (read-only)?
+val isFinalized: Boolean
+    get() = currentStatus == "SIGNED"
 
 // Total time paused (sum of all pause durations)
 val totalPausedMs: Long
@@ -594,10 +603,9 @@ CREATE INDEX idx_receipts_purchase ON purchase_receipts(purchase_id);
 │  │ id (PK)     │────────►│ id (PK)                                      │   │
 │  │ username    │         │ job_number (UNIQUE)                          │   │
 │  │ name        │         │ customer_name, phone, email                   │   │
-│  │ email       │         │ title, description, job_type                  │   │
-│  │ phone       │         │ status, priority                              │   │
-│  │ is_on_duty  │         │ service_address, lat, lng                     │   │
-│  │ current_job │         │ scheduled_date, scheduled_time                │   │
+│  │ email       │         │ title, description, job_type, priority        │   │
+│  │ phone       │         │ service_address, lat, lng                     │   │
+│  │ auth_token  │         │ scheduled_date, scheduled_time                │   │
 │  └─────────────┘         │ status_history (JSON)                         │   │
 │                          │ work details, photos, signature               │   │
 │                          └──────────────────────────────────────────────┘   │
@@ -611,9 +619,9 @@ CREATE INDEX idx_receipts_purchase ON purchase_receipts(purchase_id);
 │  │ id (PK)                 │ │ id (PK)                 │ │ id (PK)         ││
 │  │ job_id (FK)             │ │ job_id (FK)             │ │ job_id (FK)     ││
 │  │ fixed_asset_id (FK)     │ │ inventory_asset_id (FK) │ │ item_name       ││
-│  │ checkout_time           │ │ quantity_used           │ │ quantity, cost  ││
-│  │ return_time             │ │ used_at                 │ │ target_type     ││
-│  │ condition tracking      │ │ notes                   │ │ is_integrated   ││
+│  │                         │ │ quantity_used           │ │ quantity, cost  ││
+│  │                         │ │                         │ │ target_type     ││
+│  │                         │ │                         │ │ is_integrated   ││
 │  └───────────┬─────────────┘ └───────────┬─────────────┘ └────────┬────────┘│
 │              │                           │                        │         │
 │              ▼                           ▼                        ▼         │
@@ -637,8 +645,8 @@ CREATE INDEX idx_receipts_purchase ON purchase_receipts(purchase_id);
 
 **Get all resources used on a job:**
 ```sql
--- Fixed assets checked out
-SELECT fa.asset_name, fa.asset_code, jf.checkout_time, jf.return_time
+-- Fixed assets used (checkout/return times from status_history JSON)
+SELECT fa.asset_name, fa.asset_code, fa.status_history
 FROM job_fixed_assets jf
 JOIN fixed_assets fa ON jf.fixed_asset_id = fa.id
 WHERE jf.job_id = ?;
@@ -742,12 +750,12 @@ GROUP BY j.id;
 
 This schema provides:
 
-1. **Simplicity**: 8 focused tables, no redundancy
-2. **Flexibility**: JSON where beneficial, relational elsewhere
+1. **Simplicity**: 8 focused tables, minimal redundancy
+2. **Flexibility**: JSON `status_history` for both job cards and fixed assets
 3. **Traceability**: Every asset usage and purchase linked to job
-4. **Full History**: Fixed asset status changes tracked with user, timestamp, notes
+4. **Full History**: All status changes tracked with timestamp (and reason/condition where applicable)
 5. **Integration Workflow**: Purchases reviewed before adding to inventory
-6. **Maintenance Tracking**: `next_maintenance` date + history derivation
+6. **Maintenance Tracking**: `next_maintenance` date + last maintenance derived from history
 7. **Offline-First**: All data local with sync flags for server
 
 ---
