@@ -8,6 +8,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -211,10 +212,71 @@ private fun TimelineItem(
 }
 
 private fun buildTimelineEvents(job: JobCard): List<TimelineEvent> {
+    // Prefer statusHistory (normalized) for the timeline; fall back to legacy fields.
+    val statusEvents = parseStatusHistory(job.statusHistory)
+    if (statusEvents.isNotEmpty()) {
+        return statusEvents.map { event ->
+            when (event.status) {
+                JobStatus.AVAILABLE -> TimelineEvent(
+                    title = "Job Available",
+                    timestamp = event.timestamp,
+                    icon = Icons.Default.CheckCircle,
+                    color = Color.Gray
+                )
+                JobStatus.AWAITING, JobStatus.PENDING -> TimelineEvent(
+                    title = if (event.status == JobStatus.AWAITING) "Awaiting Acceptance" else "Scheduled",
+                    timestamp = event.timestamp,
+                    icon = Icons.Default.Schedule,
+                    color = Color(0xFF1976D2)
+                )
+                JobStatus.EN_ROUTE -> TimelineEvent(
+                    title = "En Route",
+                    timestamp = event.timestamp,
+                    icon = Icons.Default.DirectionsCar,
+                    color = Color(0xFF9C27B0)
+                )
+                JobStatus.BUSY -> TimelineEvent(
+                    title = "Work In Progress",
+                    timestamp = event.timestamp,
+                    icon = Icons.Default.PlayArrow,
+                    color = Color(0xFF2196F3)
+                )
+                JobStatus.PAUSED -> TimelineEvent(
+                    title = "Paused",
+                    timestamp = event.timestamp,
+                    icon = Icons.Default.Pause,
+                    color = Color(0xFFFF9800),
+                    details = event.reason
+                )
+                JobStatus.COMPLETED -> TimelineEvent(
+                    title = "Completed",
+                    timestamp = event.timestamp,
+                    icon = Icons.Default.CheckCircle,
+                    color = Color(0xFF4CAF50)
+                )
+                JobStatus.SIGNED -> TimelineEvent(
+                    title = "Signed Off",
+                    timestamp = event.timestamp,
+                    icon = Icons.Default.CheckCircle,
+                    color = Color(0xFF2E7D32),
+                    details = event.signedBy?.let { "Signed by $it" }
+                )
+                JobStatus.CANCELLED -> TimelineEvent(
+                    title = "Cancelled",
+                    timestamp = event.timestamp,
+                    icon = Icons.Default.Cancel,
+                    color = Color(0xFFF44336),
+                    details = event.reason
+                )
+                else -> null
+            }
+        }.filterNotNull().sortedBy { it.timestamp }
+    }
+
+    // Legacy fallback using timestamps/pause history.
     val events = mutableListOf<TimelineEvent>()
     val now = System.currentTimeMillis()
 
-    // Job accepted
     job.acceptedAt?.let { acceptedAt ->
         events.add(
             TimelineEvent(
@@ -226,11 +288,8 @@ private fun buildTimelineEvents(job: JobCard): List<TimelineEvent> {
         )
     }
 
-    // En Route
     job.enRouteStartTime?.let { enRouteTime ->
-        val duration = job.startTime?.let {
-            formatDuration(it - enRouteTime)
-        }
+        val duration = job.startTime?.let { formatDuration(it - enRouteTime) }
         events.add(
             TimelineEvent(
                 title = "En Route to Location",
@@ -242,7 +301,6 @@ private fun buildTimelineEvents(job: JobCard): List<TimelineEvent> {
         )
     }
 
-    // Job started (BUSY)
     job.startTime?.let { startTime ->
         if (job.status != JobStatus.PENDING) {
             events.add(
@@ -251,18 +309,14 @@ private fun buildTimelineEvents(job: JobCard): List<TimelineEvent> {
                     timestamp = startTime,
                     icon = Icons.Default.PlayArrow,
                     color = Color(0xFF2196F3),
-                    duration = if (job.status == JobStatus.COMPLETED) {
-                        "Duration: ${calculateActiveWorkTime(job)}"
-                    } else null
+                    duration = if (job.status == JobStatus.COMPLETED) "Duration: ${calculateActiveWorkTime(job)}" else null
                 )
             )
         }
     }
 
-    // Pause and Resume events from history
     val pauseEvents = parsePauseHistory(job.pauseHistory)
     pauseEvents.forEach { pauseEvent ->
-        // Add pause event
         events.add(
             TimelineEvent(
                 title = "Job Paused",
@@ -274,14 +328,12 @@ private fun buildTimelineEvents(job: JobCard): List<TimelineEvent> {
             )
         )
 
-        // Add resume event if pause has completed (duration > 0)
         pauseEvent.duration?.let { pauseDuration ->
             if (pauseDuration > 0) {
-                // Determine title and icon based on resume status
                 val (title, icon) = when (pauseEvent.resumeStatus) {
                     "BUSY" -> Pair("Work Resumed", Icons.Default.PlayArrow)
                     "EN_ROUTE" -> Pair("En Route to Location", Icons.Default.DirectionsCar)
-                    else -> Pair("En Route to Location", Icons.Default.DirectionsCar) // Default for backward compatibility
+                    else -> Pair("En Route to Location", Icons.Default.DirectionsCar)
                 }
 
                 events.add(
@@ -296,7 +348,6 @@ private fun buildTimelineEvents(job: JobCard): List<TimelineEvent> {
         }
     }
 
-    // Job completed
     if (job.status == JobStatus.COMPLETED) {
         job.endTime?.let { endTime ->
             events.add(
@@ -310,7 +361,6 @@ private fun buildTimelineEvents(job: JobCard): List<TimelineEvent> {
         }
     }
 
-    // Job cancelled
     if (job.status == JobStatus.CANCELLED) {
         events.add(
             TimelineEvent(
@@ -324,6 +374,30 @@ private fun buildTimelineEvents(job: JobCard): List<TimelineEvent> {
     }
 
     return events.sortedBy { it.timestamp }
+}
+
+private data class StatusHistoryEvent(
+    val status: JobStatus,
+    val timestamp: Long,
+    val reason: String? = null,
+    val signedBy: String? = null
+)
+
+private fun parseStatusHistory(historyJson: String?): List<StatusHistoryEvent> {
+    if (historyJson.isNullOrBlank()) return emptyList()
+    return try {
+        val arr = org.json.JSONArray(historyJson)
+        (0 until arr.length()).mapNotNull { idx ->
+            val obj = arr.getJSONObject(idx)
+            val status = try { JobStatus.valueOf(obj.getString("status")) } catch (_: Exception) { null } ?: return@mapNotNull null
+            val ts = obj.optLong("timestamp", 0L)
+            val reason = obj.optString("reason", null)?.takeIf { it.isNotBlank() }
+            val signedBy = obj.optString("signed_by", null)?.takeIf { it.isNotBlank() }
+            StatusHistoryEvent(status, ts, reason, signedBy)
+        }
+    } catch (e: Exception) {
+        emptyList()
+    }
 }
 
 private fun parsePauseHistory(pauseHistory: String?): List<PauseEvent> {

@@ -2,7 +2,6 @@ package com.metroair.job_card_management.ui.dashboard
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.metroair.job_card_management.data.local.database.dao.CurrentTechnicianDao
 import com.metroair.job_card_management.data.repository.JobCardRepository
 import com.metroair.job_card_management.data.repository.AssetRepository
 import com.metroair.job_card_management.data.repository.FixedRepository
@@ -17,7 +16,6 @@ import javax.inject.Inject
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
     private val jobCardRepository: JobCardRepository,
-    private val currentTechnicianDao: CurrentTechnicianDao,
     private val assetRepository: AssetRepository,
     private val fixedRepository: FixedRepository
 ) : ViewModel() {

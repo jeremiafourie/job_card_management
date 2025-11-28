@@ -1,10 +1,13 @@
 package com.metroair.job_card_management.data.repository
 
-import com.metroair.job_card_management.data.local.database.dao.CurrentTechnicianDao
+import com.metroair.job_card_management.data.local.database.dao.AssetDao
 import com.metroair.job_card_management.data.local.database.dao.JobCardDao
+import com.metroair.job_card_management.data.local.database.dao.JobInventoryUsageDao
 import com.metroair.job_card_management.data.local.database.entities.JobCardEntity
+import com.metroair.job_card_management.data.local.database.entities.JobInventoryUsageEntity
 import com.metroair.job_card_management.di.IoDispatcher
 import com.metroair.job_card_management.domain.model.JobCard
+import com.metroair.job_card_management.domain.model.JobPriority
 import com.metroair.job_card_management.domain.model.JobStatus
 import com.metroair.job_card_management.domain.model.JobType
 import kotlinx.coroutines.CoroutineDispatcher
@@ -16,19 +19,14 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 interface JobCardRepository {
-    // My Jobs
     fun getMyJobs(): Flow<List<JobCard>>
     fun getMyCurrentActiveJob(): Flow<JobCard?>
     fun getMyTodayPendingJobs(): Flow<List<JobCard>>
     fun getMyJobsByStatus(status: JobStatus): Flow<List<JobCard>>
     fun getJobCardById(jobId: Int): Flow<JobCard?>
-
-    // Available Jobs
     fun getAvailableJobs(): Flow<List<JobCard>>
     suspend fun claimJob(jobId: Int): Boolean
     suspend fun acceptJob(jobId: Int): Boolean
-
-    // Job Operations
     suspend fun canStartNewJob(): Boolean
     suspend fun startJob(jobId: Int): Boolean
     suspend fun pauseJob(jobId: Int, reason: String): Boolean
@@ -61,64 +59,47 @@ interface JobCardRepository {
     suspend fun retagPhoto(jobId: Int, photoUri: String, fromCategory: String, toCategory: String): Boolean
     suspend fun updatePhotoNotes(jobId: Int, photoUri: String, category: String, notes: String): Boolean
     suspend fun updateJobAssets(jobId: Int, resourcesJson: String): Boolean
-
-    // Stats
     suspend fun getTodayCompletedCount(): Int
     suspend fun getJobById(jobId: Int): JobCard?
-
-    // Search
     fun searchJobs(query: String): Flow<List<JobCard>>
 }
 
 @Singleton
 class JobCardRepositoryImpl @Inject constructor(
     private val jobCardDao: JobCardDao,
-    private val currentTechnicianDao: CurrentTechnicianDao,
-    private val assetDao: com.metroair.job_card_management.data.local.database.dao.AssetDao,
+    private val assetDao: AssetDao,
+    private val jobInventoryUsageDao: JobInventoryUsageDao,
     @IoDispatcher private val ioDispatcher: CoroutineDispatcher
 ) : JobCardRepository {
 
-    // ========== MY JOBS ==========
-
     override fun getMyJobs(): Flow<List<JobCard>> =
         jobCardDao.getMyJobs()
-            .map { entities ->
-                entities.map { entity -> entity.toDomainModel() }
-            }
+            .map { entities -> entities.map { it.toDomainModel() } }
             .flowOn(ioDispatcher)
 
     override fun getMyCurrentActiveJob(): Flow<JobCard?> =
         jobCardDao.getMyCurrentActiveJob()
-            .map { entity -> entity?.toDomainModel() }
+            .map { it?.toDomainModel() }
             .flowOn(ioDispatcher)
 
     override fun getMyTodayPendingJobs(): Flow<List<JobCard>> =
         jobCardDao.getMyTodayPendingJobs()
-            .map { entities ->
-                entities.map { entity -> entity.toDomainModel() }
-            }
+            .map { entities -> entities.map { it.toDomainModel() } }
             .flowOn(ioDispatcher)
 
     override fun getMyJobsByStatus(status: JobStatus): Flow<List<JobCard>> =
         jobCardDao.getMyJobsByStatus(status.name)
-            .map { entities ->
-                entities.map { entity -> entity.toDomainModel() }
-            }
+            .map { entities -> entities.map { it.toDomainModel() } }
             .flowOn(ioDispatcher)
-
-    // ========== AVAILABLE JOBS ==========
 
     override fun getAvailableJobs(): Flow<List<JobCard>> =
         jobCardDao.getAvailableJobs()
-            .map { entities ->
-                entities.map { entity -> entity.toDomainModel() }
-            }
+            .map { entities -> entities.map { it.toDomainModel() } }
             .flowOn(ioDispatcher)
 
     override suspend fun claimJob(jobId: Int): Boolean = withContext(ioDispatcher) {
-        // Technician can claim jobs even with an active job (to work on later)
         val rowsUpdated = jobCardDao.claimJob(jobId, System.currentTimeMillis())
-        return@withContext rowsUpdated > 0
+        rowsUpdated > 0
     }
 
     override suspend fun acceptJob(jobId: Int): Boolean = withContext(ioDispatcher) {
@@ -130,222 +111,81 @@ class JobCardRepositoryImpl @Inject constructor(
         }
     }
 
-    // ========== JOB OPERATIONS ==========
-
     override suspend fun canStartNewJob(): Boolean = withContext(ioDispatcher) {
-        // Technician can only have ONE active job (BUSY or EN_ROUTE)
         val activeJobCount = jobCardDao.getMyActiveJobCount()
         activeJobCount == 0
     }
 
     override suspend fun startJob(jobId: Int): Boolean = withContext(ioDispatcher) {
-        try {
-            // Check if can start new job
-            val job = jobCardDao.getJobById(jobId)
-            if (job == null || !job.isMyJob) return@withContext false
-
-            val newStatus = if (job.status == "PENDING") "EN_ROUTE" else "BUSY"
-
-            // Check if already has an active job (only when starting a new EN_ROUTE job)
-            // Allow EN_ROUTE → BUSY transition even with active jobs (same job)
-            if (job.status == "PENDING" && !canStartNewJob()) {
-                return@withContext false
-            }
-
-            val startTime = if (newStatus == "BUSY") System.currentTimeMillis() else job.startTime
-
-            jobCardDao.startJob(
-                id = jobId,
-                status = newStatus,
-                timestamp = System.currentTimeMillis(),
-                startTime = startTime ?: System.currentTimeMillis()
-            )
-
-            // Update technician's current active job
-            if (newStatus == "BUSY") {
-                currentTechnicianDao.setCurrentActiveJob(jobId)
-            }
-
-            true
-        } catch (e: Exception) {
-            false
-        }
+        val job = jobCardDao.getJobById(jobId) ?: return@withContext false
+        val newStatus = if (job.status == "PENDING") "EN_ROUTE" else "BUSY"
+        if (job.status == "PENDING" && !canStartNewJob()) return@withContext false
+        val now = System.currentTimeMillis()
+        val updated = job.copy(
+            status = newStatus,
+            startTime = job.startTime ?: now,
+            enRouteStartTime = if (newStatus == "EN_ROUTE") now else job.enRouteStartTime,
+            statusHistory = appendStatusEvent(job.statusHistory, newStatus),
+            updatedAt = now
+        )
+        jobCardDao.updateJob(updated)
+        true
     }
 
     override suspend fun pauseJob(jobId: Int, reason: String): Boolean = withContext(ioDispatcher) {
-        try {
-            val job = jobCardDao.getJobById(jobId)
-            if (job == null || !job.isMyJob || job.status != "BUSY") {
-                return@withContext false
-            }
-
-            val pauseTimestamp = System.currentTimeMillis()
-
-            // Store pause event in JSON history (duration will be calculated on resume)
-            val existingHistory = try {
-                org.json.JSONArray(job.pauseHistory ?: "[]")
-            } catch (e: Exception) {
-                org.json.JSONArray()
-            }
-
-            val pauseEvent = org.json.JSONObject().apply {
-                put("timestamp", pauseTimestamp)
-                put("reason", reason)
-                put("duration", 0) // Will be updated on resume
-            }
-            existingHistory.put(pauseEvent)
-
-            // Update job with pause status and history
-            jobCardDao.pauseJob(jobId, 0, existingHistory.toString(), pauseTimestamp)
-
-            // Clear technician's current active job
-            currentTechnicianDao.setCurrentActiveJob(null)
-
-            true
-        } catch (e: Exception) {
-            android.util.Log.e("JobCardRepository", "Error pausing job", e)
-            false
-        }
+        val job = jobCardDao.getJobById(jobId) ?: return@withContext false
+        if (job.status != "BUSY") return@withContext false
+        val now = System.currentTimeMillis()
+        val updated = job.copy(
+            status = "PAUSED",
+            pauseHistory = appendPause(job.pauseHistory, reason, now),
+            statusHistory = appendStatusEvent(job.statusHistory, "PAUSED", reason),
+            updatedAt = now
+        )
+        jobCardDao.updateJob(updated)
+        true
     }
 
     override suspend fun cancelJob(jobId: Int, reason: String): Boolean = withContext(ioDispatcher) {
-        try {
-            val job = jobCardDao.getJobById(jobId)
-            if (job == null || !job.isMyJob || job.status == "COMPLETED" || job.status == "CANCELLED") {
-                return@withContext false
-            }
-
-            val timestamp = System.currentTimeMillis()
-
-            // Update job to cancelled status with reason and timestamp
-            val updatedJob = job.copy(
-                status = "CANCELLED",
-                cancelledAt = timestamp,
-                cancellationReason = reason,
-                updatedAt = timestamp
-            )
-            jobCardDao.updateJob(updatedJob)
-
-            // Clear technician's current active job if this was the active one
-            if (job.status == "BUSY") {
-                currentTechnicianDao.setCurrentActiveJob(null)
-            }
-            true
-        } catch (e: Exception) {
-            false
-        }
+        val job = jobCardDao.getJobById(jobId) ?: return@withContext false
+        val now = System.currentTimeMillis()
+        val updated = job.copy(
+            status = "CANCELLED",
+            cancellationReason = reason,
+            cancelledAt = now,
+            statusHistory = appendStatusEvent(job.statusHistory, "CANCELLED"),
+            updatedAt = now
+        )
+        jobCardDao.updateJob(updated)
+        true
     }
 
     override suspend fun resumeJob(jobId: Int): Boolean = withContext(ioDispatcher) {
-        try {
-            val job = jobCardDao.getJobById(jobId)
-            if (job == null || !job.isMyJob || job.status != "PAUSED") {
-                return@withContext false
-            }
-
-            // Check if can resume (no other active job)
-            if (!canStartNewJob()) {
-                return@withContext false
-            }
-
-            val resumeTimestamp = System.currentTimeMillis()
-
-            // Update the last pause event with the actual duration
-            val pauseHistory = try {
-                org.json.JSONArray(job.pauseHistory ?: "[]")
-            } catch (e: Exception) {
-                org.json.JSONArray()
-            }
-
-            if (pauseHistory.length() > 0) {
-                val lastPauseIndex = pauseHistory.length() - 1
-                val lastPause = pauseHistory.getJSONObject(lastPauseIndex)
-                val pauseStartTime = lastPause.getLong("timestamp")
-                val pauseDuration = resumeTimestamp - pauseStartTime
-
-                // Update the last pause event with calculated duration and resume status
-                lastPause.put("duration", pauseDuration)
-                lastPause.put("resumeStatus", "BUSY")
-                pauseHistory.put(lastPauseIndex, lastPause)
-
-                // Calculate total paused time
-                val totalPausedTime = (job.pausedTime ?: 0L) + pauseDuration
-
-                // Update job with new pause history and total paused time
-                val updatedJob = job.copy(
-                    status = "BUSY",
-                    pauseHistory = pauseHistory.toString(),
-                    pausedTime = totalPausedTime,
-                    updatedAt = resumeTimestamp
-                )
-                jobCardDao.updateJob(updatedJob)
-            } else {
-                // No pause history, just resume normally
-                jobCardDao.resumeJobToBusy(jobId, resumeTimestamp)
-            }
-
-            currentTechnicianDao.setCurrentActiveJob(jobId)
-            true
-        } catch (e: Exception) {
-            android.util.Log.e("JobCardRepository", "Error resuming job", e)
-            false
-        }
+        val job = jobCardDao.getJobById(jobId) ?: return@withContext false
+        if (job.status != "PAUSED") return@withContext false
+        if (!canStartNewJob()) return@withContext false
+        val now = System.currentTimeMillis()
+        val updated = job.copy(
+            status = "BUSY",
+            statusHistory = appendStatusEvent(job.statusHistory, "BUSY"),
+            updatedAt = now
+        )
+        jobCardDao.updateJob(updated)
+        true
     }
 
     override suspend fun enRouteJob(jobId: Int): Boolean = withContext(ioDispatcher) {
-        try {
-            val job = jobCardDao.getJobById(jobId)
-            if (job == null || !job.isMyJob || job.status != "PAUSED") {
-                return@withContext false
-            }
-
-            // Check if can resume (no other active job)
-            if (!canStartNewJob()) {
-                return@withContext false
-            }
-
-            val resumeTimestamp = System.currentTimeMillis()
-
-            // Update the last pause event with the actual duration
-            val pauseHistory = try {
-                org.json.JSONArray(job.pauseHistory ?: "[]")
-            } catch (e: Exception) {
-                org.json.JSONArray()
-            }
-
-            if (pauseHistory.length() > 0) {
-                val lastPauseIndex = pauseHistory.length() - 1
-                val lastPause = pauseHistory.getJSONObject(lastPauseIndex)
-                val pauseStartTime = lastPause.getLong("timestamp")
-                val pauseDuration = resumeTimestamp - pauseStartTime
-
-                // Update the last pause event with calculated duration and resume status
-                lastPause.put("duration", pauseDuration)
-                lastPause.put("resumeStatus", "EN_ROUTE")
-                pauseHistory.put(lastPauseIndex, lastPause)
-
-                // Calculate total paused time
-                val totalPausedTime = (job.pausedTime ?: 0L) + pauseDuration
-
-                // Update job with new pause history and total paused time
-                val updatedJob = job.copy(
-                    status = "EN_ROUTE",
-                    pauseHistory = pauseHistory.toString(),
-                    pausedTime = totalPausedTime,
-                    updatedAt = resumeTimestamp
-                )
-                jobCardDao.updateJob(updatedJob)
-            } else {
-                // No pause history, just resume normally
-                jobCardDao.resumeJobToEnRoute(jobId, resumeTimestamp)
-            }
-
-            currentTechnicianDao.setCurrentActiveJob(jobId)
-            true
-        } catch (e: Exception) {
-            android.util.Log.e("JobCardRepository", "Error setting job to en route", e)
-            false
-        }
+        val job = jobCardDao.getJobById(jobId) ?: return@withContext false
+        if (job.status != "PAUSED") return@withContext false
+        if (!canStartNewJob()) return@withContext false
+        val now = System.currentTimeMillis()
+        val updated = job.copy(
+            status = "EN_ROUTE",
+            statusHistory = appendStatusEvent(job.statusHistory, "EN_ROUTE"),
+            updatedAt = now
+        )
+        jobCardDao.updateJob(updated)
+        true
     }
 
     override suspend fun completeJob(
@@ -356,51 +196,65 @@ class JobCardRepositoryImpl @Inject constructor(
         requiresFollowUp: Boolean,
         followUpNotes: String?
     ): Boolean = withContext(ioDispatcher) {
-        try {
-            jobCardDao.completeJob(
-                id = jobId,
-                endTime = System.currentTimeMillis(),
-                workPerformed = workPerformed,
-                notes = technicianNotes,
-                resourcesUsed = resourcesUsed,
-                requiresFollowUp = requiresFollowUp,
-                followUpNotes = followUpNotes,
-                timestamp = System.currentTimeMillis()
-            )
+        val job = jobCardDao.getJobById(jobId) ?: return@withContext false
+        val now = System.currentTimeMillis()
+        val updated = job.copy(
+            status = "COMPLETED",
+            endTime = now,
+            workPerformed = workPerformed,
+            technicianNotes = technicianNotes,
+            resourcesUsed = resourcesUsed,
+            requiresFollowUp = requiresFollowUp,
+            followUpNotes = followUpNotes,
+            statusHistory = appendStatusEvent(job.statusHistory, "COMPLETED"),
+            updatedAt = now
+        )
+        jobCardDao.updateJob(updated)
 
-            // Deduct resources from stock now that job is completed
-            if (!resourcesUsed.isNullOrBlank()) {
-                try {
-                    val jsonArray = org.json.JSONArray(resourcesUsed)
-                    for (i in 0 until jsonArray.length()) {
-                        val resource = jsonArray.getJSONObject(i)
-                        val resourceId = resource.getInt("id")
-                        val quantity = resource.getDouble("quantity")
-                        // Deduct the quantity from current stock
-                        assetDao.useAsset(resourceId, quantity)
-                    }
-                } catch (e: Exception) {
-                    android.util.Log.e("JobCardRepository", "Error deducting resources from stock", e)
-                    // Don't fail the job completion if resource deduction fails
+        // Normalize resource usage into job_inventory_usage table and decrement stock
+        if (!resourcesUsed.isNullOrBlank()) {
+            try {
+                val jsonArray = org.json.JSONArray(resourcesUsed)
+                val usageEntities = mutableListOf<JobInventoryUsageEntity>()
+                for (i in 0 until jsonArray.length()) {
+                    val resource = jsonArray.getJSONObject(i)
+                    val resourceId = resource.getInt("id")
+                    val quantity = resource.getDouble("quantity")
+                    val name = resource.optString("name")
+                    val code = resource.optString("code")
+                    val unit = resource.optString("unit")
+                    usageEntities.add(
+                        JobInventoryUsageEntity(
+                            jobId = jobId,
+                            inventoryId = resourceId,
+                            itemCode = code,
+                            itemName = name,
+                            quantity = quantity,
+                            unitOfMeasure = unit
+                        )
+                    )
+                    assetDao.useAsset(resourceId, quantity, now)
                 }
+                jobInventoryUsageDao.insertUsageList(usageEntities)
+            } catch (e: Exception) {
+                android.util.Log.e("JobCardRepository", "Error normalizing inventory usage", e)
             }
-
-            // Clear technician's current active job
-            currentTechnicianDao.setCurrentActiveJob(null)
-
-            // Increment completed jobs counter
-            currentTechnicianDao.incrementTodayCompletedJobs()
-
-            true
-        } catch (e: Exception) {
-            false
         }
+        true
     }
 
     override suspend fun addCustomerSignature(jobId: Int, signature: String): Boolean =
         withContext(ioDispatcher) {
             try {
-                jobCardDao.addCustomerSignature(jobId, signature, System.currentTimeMillis())
+                val job = jobCardDao.getJobById(jobId) ?: return@withContext false
+                jobCardDao.updateJob(
+                    job.copy(
+                        customerSignature = signature,
+                        status = "SIGNED",
+                        statusHistory = appendStatusEvent(job.statusHistory, "SIGNED"),
+                        updatedAt = System.currentTimeMillis()
+                    )
+                )
                 true
             } catch (e: Exception) {
                 false
@@ -408,32 +262,25 @@ class JobCardRepositoryImpl @Inject constructor(
         }
 
     override suspend fun addBeforePhotos(jobId: Int, photos: List<String>): Boolean =
-        withContext(ioDispatcher) {
-            try {
-                val photosJson = photos.joinToString(",", "[\"", "\"]") { it }
-                jobCardDao.addBeforePhotos(jobId, photosJson, System.currentTimeMillis())
-                true
-            } catch (e: Exception) {
-                false
-            }
-        }
+        addPhotos(jobId, photos, category = "BEFORE")
 
     override suspend fun addAfterPhotos(jobId: Int, photos: List<String>): Boolean =
-        withContext(ioDispatcher) {
-            try {
-                val photosJson = photos.joinToString(",", "[\"", "\"]") { it }
-                jobCardDao.addAfterPhotos(jobId, photosJson, System.currentTimeMillis())
-                true
-            } catch (e: Exception) {
-                false
-            }
-        }
+        addPhotos(jobId, photos, category = "AFTER")
 
     override suspend fun addOtherPhotos(jobId: Int, photos: List<String>): Boolean =
+        addPhotos(jobId, photos, category = "OTHER")
+
+    private suspend fun addPhotos(jobId: Int, photos: List<String>, category: String): Boolean =
         withContext(ioDispatcher) {
             try {
+                val job = jobCardDao.getJobById(jobId) ?: return@withContext false
                 val photosJson = photos.joinToString(",", "[\"", "\"]") { it }
-                jobCardDao.addOtherPhotos(jobId, photosJson, System.currentTimeMillis())
+                val updated = when (category.uppercase()) {
+                    "BEFORE" -> job.copy(beforePhotos = photosJson, updatedAt = System.currentTimeMillis())
+                    "AFTER" -> job.copy(afterPhotos = photosJson, updatedAt = System.currentTimeMillis())
+                    else -> job.copy(otherPhotos = photosJson, updatedAt = System.currentTimeMillis())
+                }
+                jobCardDao.updateJob(updated)
                 true
             } catch (e: Exception) {
                 false
@@ -444,147 +291,32 @@ class JobCardRepositoryImpl @Inject constructor(
         withContext(ioDispatcher) {
             try {
                 val job = jobCardDao.getJobById(jobId) ?: return@withContext false
-
-                // Get existing photos for the category and add new photo with notes
-                val updatedPhotos = when (category.uppercase()) {
-                    "BEFORE" -> {
-                        val existingPhotos = parsePhotosJson(job.beforePhotos)
-                        val newPhoto = org.json.JSONObject().apply {
-                            put("uri", photoUri)
-                            if (!notes.isNullOrEmpty()) put("notes", notes)
-                        }
-                        val photosArray = org.json.JSONArray(existingPhotos).apply { put(newPhoto) }
-                        jobCardDao.addBeforePhotos(jobId, photosArray.toString(), System.currentTimeMillis())
-                    }
-                    "AFTER" -> {
-                        val existingPhotos = parsePhotosJson(job.afterPhotos)
-                        val newPhoto = org.json.JSONObject().apply {
-                            put("uri", photoUri)
-                            if (!notes.isNullOrEmpty()) put("notes", notes)
-                        }
-                        val photosArray = org.json.JSONArray(existingPhotos).apply { put(newPhoto) }
-                        jobCardDao.addAfterPhotos(jobId, photosArray.toString(), System.currentTimeMillis())
-                    }
-                    else -> {
-                        val existingPhotos = parsePhotosJson(job.otherPhotos)
-                        val newPhoto = org.json.JSONObject().apply {
-                            put("uri", photoUri)
-                            if (!notes.isNullOrEmpty()) put("notes", notes)
-                        }
-                        val photosArray = org.json.JSONArray(existingPhotos).apply { put(newPhoto) }
-                        jobCardDao.addOtherPhotos(jobId, photosArray.toString(), System.currentTimeMillis())
-                    }
+                val updatedJson = addPhotoToJson(selectPhotoJson(job, category), photoUri, notes)
+                val updated = when (category.uppercase()) {
+                    "BEFORE" -> job.copy(beforePhotos = updatedJson, updatedAt = System.currentTimeMillis())
+                    "AFTER" -> job.copy(afterPhotos = updatedJson, updatedAt = System.currentTimeMillis())
+                    else -> job.copy(otherPhotos = updatedJson, updatedAt = System.currentTimeMillis())
                 }
+                jobCardDao.updateJob(updated)
                 true
             } catch (e: Exception) {
-                android.util.Log.e("JobCardRepository", "Error adding photo", e)
                 false
             }
         }
-
-    // Helper function to parse photo JSON - handles both old format (string array) and new format (object array)
-    private fun parsePhotosJson(photosJson: String?): String {
-        if (photosJson == null || photosJson == "null") return "[]"
-
-        return try {
-            val jsonArray = org.json.JSONArray(photosJson)
-            val resultArray = org.json.JSONArray()
-
-            for (i in 0 until jsonArray.length()) {
-                when (val item = jsonArray.get(i)) {
-                    is String -> {
-                        // Old format: convert string to object
-                        resultArray.put(org.json.JSONObject().apply {
-                            put("uri", item)
-                        })
-                    }
-                    is org.json.JSONObject -> {
-                        // New format: keep as is
-                        resultArray.put(item)
-                    }
-                }
-            }
-            resultArray.toString()
-        } catch (e: Exception) {
-            "[]"
-        }
-    }
-
-    // Helper function to parse photos to List<PhotoWithNotes>
-    private fun parsePhotosToList(photosJson: String?): List<com.metroair.job_card_management.domain.model.PhotoWithNotes>? {
-        if (photosJson == null || photosJson == "null") return null
-
-        return try {
-            val jsonArray = org.json.JSONArray(photosJson)
-            val photosList = mutableListOf<com.metroair.job_card_management.domain.model.PhotoWithNotes>()
-
-            for (i in 0 until jsonArray.length()) {
-                when (val item = jsonArray.get(i)) {
-                    is String -> {
-                        // Old format: string URI without notes
-                        photosList.add(com.metroair.job_card_management.domain.model.PhotoWithNotes(uri = item))
-                    }
-                    is org.json.JSONObject -> {
-                        // New format: object with uri and optional notes
-                        val uri = item.getString("uri")
-                        val notes = item.optString("notes", null)?.takeIf { it.isNotEmpty() }
-                        photosList.add(com.metroair.job_card_management.domain.model.PhotoWithNotes(uri = uri, notes = notes))
-                    }
-                }
-            }
-            photosList.ifEmpty { null }
-        } catch (e: Exception) {
-            null
-        }
-    }
 
     override suspend fun removePhoto(jobId: Int, photoUri: String, category: String): Boolean =
         withContext(ioDispatcher) {
             try {
                 val job = jobCardDao.getJobById(jobId) ?: return@withContext false
-
-                // Get existing photos for the category and remove the photo
-                when (category.uppercase()) {
-                    "BEFORE" -> {
-                        val photosArray = org.json.JSONArray(parsePhotosJson(job.beforePhotos))
-                        val updatedArray = org.json.JSONArray()
-                        for (i in 0 until photosArray.length()) {
-                            val photo = photosArray.getJSONObject(i)
-                            if (photo.getString("uri") != photoUri) {
-                                updatedArray.put(photo)
-                            }
-                        }
-                        val photosJson = if (updatedArray.length() == 0) null else updatedArray.toString()
-                        jobCardDao.addBeforePhotos(jobId, photosJson, System.currentTimeMillis())
-                    }
-                    "AFTER" -> {
-                        val photosArray = org.json.JSONArray(parsePhotosJson(job.afterPhotos))
-                        val updatedArray = org.json.JSONArray()
-                        for (i in 0 until photosArray.length()) {
-                            val photo = photosArray.getJSONObject(i)
-                            if (photo.getString("uri") != photoUri) {
-                                updatedArray.put(photo)
-                            }
-                        }
-                        val photosJson = if (updatedArray.length() == 0) null else updatedArray.toString()
-                        jobCardDao.addAfterPhotos(jobId, photosJson, System.currentTimeMillis())
-                    }
-                    else -> {
-                        val photosArray = org.json.JSONArray(parsePhotosJson(job.otherPhotos))
-                        val updatedArray = org.json.JSONArray()
-                        for (i in 0 until photosArray.length()) {
-                            val photo = photosArray.getJSONObject(i)
-                            if (photo.getString("uri") != photoUri) {
-                                updatedArray.put(photo)
-                            }
-                        }
-                        val photosJson = if (updatedArray.length() == 0) null else updatedArray.toString()
-                        jobCardDao.addOtherPhotos(jobId, photosJson, System.currentTimeMillis())
-                    }
+                val updatedJson = removePhotoFromJson(selectPhotoJson(job, category), photoUri)
+                val updated = when (category.uppercase()) {
+                    "BEFORE" -> job.copy(beforePhotos = updatedJson, updatedAt = System.currentTimeMillis())
+                    "AFTER" -> job.copy(afterPhotos = updatedJson, updatedAt = System.currentTimeMillis())
+                    else -> job.copy(otherPhotos = updatedJson, updatedAt = System.currentTimeMillis())
                 }
+                jobCardDao.updateJob(updated)
                 true
             } catch (e: Exception) {
-                android.util.Log.e("JobCardRepository", "Error removing photo", e)
                 false
             }
         }
@@ -593,79 +325,21 @@ class JobCardRepositoryImpl @Inject constructor(
         withContext(ioDispatcher) {
             try {
                 val job = jobCardDao.getJobById(jobId) ?: return@withContext false
-
-                // Find and remove photo from old category (preserve notes)
-                var photoObject: org.json.JSONObject? = null
-
+                val (fromJson, toJson) = retagPhotoJson(job, photoUri, fromCategory, toCategory)
+                var updatedJob = job
                 when (fromCategory.uppercase()) {
-                    "BEFORE" -> {
-                        val photosArray = org.json.JSONArray(parsePhotosJson(job.beforePhotos))
-                        val updatedArray = org.json.JSONArray()
-                        for (i in 0 until photosArray.length()) {
-                            val photo = photosArray.getJSONObject(i)
-                            if (photo.getString("uri") == photoUri) {
-                                photoObject = photo
-                            } else {
-                                updatedArray.put(photo)
-                            }
-                        }
-                        val photosJson = if (updatedArray.length() == 0) null else updatedArray.toString()
-                        jobCardDao.addBeforePhotos(jobId, photosJson, System.currentTimeMillis())
-                    }
-                    "AFTER" -> {
-                        val photosArray = org.json.JSONArray(parsePhotosJson(job.afterPhotos))
-                        val updatedArray = org.json.JSONArray()
-                        for (i in 0 until photosArray.length()) {
-                            val photo = photosArray.getJSONObject(i)
-                            if (photo.getString("uri") == photoUri) {
-                                photoObject = photo
-                            } else {
-                                updatedArray.put(photo)
-                            }
-                        }
-                        val photosJson = if (updatedArray.length() == 0) null else updatedArray.toString()
-                        jobCardDao.addAfterPhotos(jobId, photosJson, System.currentTimeMillis())
-                    }
-                    else -> {
-                        val photosArray = org.json.JSONArray(parsePhotosJson(job.otherPhotos))
-                        val updatedArray = org.json.JSONArray()
-                        for (i in 0 until photosArray.length()) {
-                            val photo = photosArray.getJSONObject(i)
-                            if (photo.getString("uri") == photoUri) {
-                                photoObject = photo
-                            } else {
-                                updatedArray.put(photo)
-                            }
-                        }
-                        val photosJson = if (updatedArray.length() == 0) null else updatedArray.toString()
-                        jobCardDao.addOtherPhotos(jobId, photosJson, System.currentTimeMillis())
-                    }
+                    "BEFORE" -> updatedJob = updatedJob.copy(beforePhotos = fromJson)
+                    "AFTER" -> updatedJob = updatedJob.copy(afterPhotos = fromJson)
+                    else -> updatedJob = updatedJob.copy(otherPhotos = fromJson)
                 }
-
-                if (photoObject == null) return@withContext false
-
-                // Add to new category with preserved notes
-                val updatedJob = jobCardDao.getJobById(jobId) ?: return@withContext false
                 when (toCategory.uppercase()) {
-                    "BEFORE" -> {
-                        val photosArray = org.json.JSONArray(parsePhotosJson(updatedJob.beforePhotos))
-                        photosArray.put(photoObject)
-                        jobCardDao.addBeforePhotos(jobId, photosArray.toString(), System.currentTimeMillis())
-                    }
-                    "AFTER" -> {
-                        val photosArray = org.json.JSONArray(parsePhotosJson(updatedJob.afterPhotos))
-                        photosArray.put(photoObject)
-                        jobCardDao.addAfterPhotos(jobId, photosArray.toString(), System.currentTimeMillis())
-                    }
-                    else -> {
-                        val photosArray = org.json.JSONArray(parsePhotosJson(updatedJob.otherPhotos))
-                        photosArray.put(photoObject)
-                        jobCardDao.addOtherPhotos(jobId, photosArray.toString(), System.currentTimeMillis())
-                    }
+                    "BEFORE" -> updatedJob = updatedJob.copy(beforePhotos = toJson)
+                    "AFTER" -> updatedJob = updatedJob.copy(afterPhotos = toJson)
+                    else -> updatedJob = updatedJob.copy(otherPhotos = toJson)
                 }
+                jobCardDao.updateJob(updatedJob.copy(updatedAt = System.currentTimeMillis()))
                 true
             } catch (e: Exception) {
-                android.util.Log.e("JobCardRepository", "Error retagging photo", e)
                 false
             }
         }
@@ -674,56 +348,15 @@ class JobCardRepositoryImpl @Inject constructor(
         withContext(ioDispatcher) {
             try {
                 val job = jobCardDao.getJobById(jobId) ?: return@withContext false
-
-                // Find and update the photo with new notes
-                when (category.uppercase()) {
-                    "BEFORE" -> {
-                        val photosArray = org.json.JSONArray(parsePhotosJson(job.beforePhotos))
-                        val updatedArray = org.json.JSONArray()
-
-                        for (i in 0 until photosArray.length()) {
-                            val photo = photosArray.getJSONObject(i)
-                            if (photo.getString("uri") == photoUri) {
-                                // Update notes for this photo
-                                photo.put("notes", notes)
-                            }
-                            updatedArray.put(photo)
-                        }
-
-                        jobCardDao.addBeforePhotos(jobId, updatedArray.toString(), System.currentTimeMillis())
-                    }
-                    "AFTER" -> {
-                        val photosArray = org.json.JSONArray(parsePhotosJson(job.afterPhotos))
-                        val updatedArray = org.json.JSONArray()
-
-                        for (i in 0 until photosArray.length()) {
-                            val photo = photosArray.getJSONObject(i)
-                            if (photo.getString("uri") == photoUri) {
-                                photo.put("notes", notes)
-                            }
-                            updatedArray.put(photo)
-                        }
-
-                        jobCardDao.addAfterPhotos(jobId, updatedArray.toString(), System.currentTimeMillis())
-                    }
-                    else -> {
-                        val photosArray = org.json.JSONArray(parsePhotosJson(job.otherPhotos))
-                        val updatedArray = org.json.JSONArray()
-
-                        for (i in 0 until photosArray.length()) {
-                            val photo = photosArray.getJSONObject(i)
-                            if (photo.getString("uri") == photoUri) {
-                                photo.put("notes", notes)
-                            }
-                            updatedArray.put(photo)
-                        }
-
-                        jobCardDao.addOtherPhotos(jobId, updatedArray.toString(), System.currentTimeMillis())
-                    }
+                val updatedJson = updatePhotoNotesJson(selectPhotoJson(job, category), photoUri, notes)
+                val updated = when (category.uppercase()) {
+                    "BEFORE" -> job.copy(beforePhotos = updatedJson, updatedAt = System.currentTimeMillis())
+                    "AFTER" -> job.copy(afterPhotos = updatedJson, updatedAt = System.currentTimeMillis())
+                    else -> job.copy(otherPhotos = updatedJson, updatedAt = System.currentTimeMillis())
                 }
+                jobCardDao.updateJob(updated)
                 true
             } catch (e: Exception) {
-                android.util.Log.e("JobCardRepository", "Error updating photo notes", e)
                 false
             }
         }
@@ -732,19 +365,12 @@ class JobCardRepositoryImpl @Inject constructor(
         withContext(ioDispatcher) {
             try {
                 val job = jobCardDao.getJobById(jobId) ?: return@withContext false
-                val updatedJob = job.copy(
-                    resourcesUsed = resourcesJson,
-                    updatedAt = System.currentTimeMillis()
-                )
-                jobCardDao.updateJob(updatedJob)
+                jobCardDao.updateJob(job.copy(resourcesUsed = resourcesJson, updatedAt = System.currentTimeMillis()))
                 true
             } catch (e: Exception) {
-                android.util.Log.e("JobCardRepository", "Error updating job resources", e)
                 false
             }
         }
-
-    // ========== STATS ==========
 
     override suspend fun getTodayCompletedCount(): Int = withContext(ioDispatcher) {
         jobCardDao.getTodayCompletedCount()
@@ -790,7 +416,83 @@ class JobCardRepositoryImpl @Inject constructor(
             .map { entities -> entities.map { it.toDomainModel() } }
             .flowOn(ioDispatcher)
 
-    // ========== MAPPING ==========
+    private fun appendStatusEvent(existing: String?, newStatus: String, reason: String? = null): String {
+        val array = try { org.json.JSONArray(existing ?: "[]") } catch (_: Exception) { org.json.JSONArray() }
+        val obj = org.json.JSONObject().apply {
+            put("status", newStatus)
+            put("timestamp", System.currentTimeMillis())
+            reason?.let { put("reason", it) }
+        }
+        array.put(obj)
+        return array.toString()
+    }
+
+    private fun appendPause(existing: String?, reason: String, timestamp: Long): String {
+        val array = try { org.json.JSONArray(existing ?: "[]") } catch (_: Exception) { org.json.JSONArray() }
+        val obj = org.json.JSONObject().apply {
+            put("timestamp", timestamp)
+            put("reason", reason)
+        }
+        array.put(obj)
+        return array.toString()
+    }
+
+    private fun selectPhotoJson(job: JobCardEntity, category: String): String? =
+        when (category.uppercase()) {
+            "BEFORE" -> job.beforePhotos
+            "AFTER" -> job.afterPhotos
+            else -> job.otherPhotos
+        }
+
+    private fun addPhotoToJson(existing: String?, uri: String, notes: String?): String {
+        val array = try { org.json.JSONArray(existing ?: "[]") } catch (_: Exception) { org.json.JSONArray() }
+        val obj = org.json.JSONObject().apply {
+            put("uri", uri)
+            if (!notes.isNullOrEmpty()) put("notes", notes)
+        }
+        array.put(obj)
+        return array.toString()
+    }
+
+    private fun removePhotoFromJson(existing: String?, uri: String): String? {
+        val array = try { org.json.JSONArray(existing ?: "[]") } catch (_: Exception) { org.json.JSONArray() }
+        val filtered = org.json.JSONArray()
+        for (i in 0 until array.length()) {
+            val photo = array.getJSONObject(i)
+            if (photo.optString("uri") != uri) filtered.put(photo)
+        }
+        return if (filtered.length() == 0) null else filtered.toString()
+    }
+
+    private fun retagPhotoJson(job: JobCardEntity, uri: String, from: String, to: String): Pair<String?, String?> {
+        val fromArray = try { org.json.JSONArray(selectPhotoJson(job, from) ?: "[]") } catch (_: Exception) { org.json.JSONArray() }
+        val toArray = try { org.json.JSONArray(selectPhotoJson(job, to) ?: "[]") } catch (_: Exception) { org.json.JSONArray() }
+        var moved: org.json.JSONObject? = null
+        val newFrom = org.json.JSONArray()
+        for (i in 0 until fromArray.length()) {
+            val photo = fromArray.getJSONObject(i)
+            if (photo.optString("uri") == uri) {
+                moved = photo
+            } else {
+                newFrom.put(photo)
+            }
+        }
+        moved?.let { toArray.put(it) }
+        return Pair(if (newFrom.length() == 0) null else newFrom.toString(), toArray.toString())
+    }
+
+    private fun updatePhotoNotesJson(existing: String?, uri: String, notes: String): String {
+        val array = try { org.json.JSONArray(existing ?: "[]") } catch (_: Exception) { org.json.JSONArray() }
+        val updated = org.json.JSONArray()
+        for (i in 0 until array.length()) {
+            val photo = array.getJSONObject(i)
+            if (photo.optString("uri") == uri) {
+                photo.put("notes", notes)
+            }
+            updated.put(photo)
+        }
+        return updated.toString()
+    }
 
     private fun JobCardEntity.toDomainModel(): JobCard {
         return JobCard(
@@ -800,16 +502,19 @@ class JobCardRepositoryImpl @Inject constructor(
             customerName = customerName,
             customerPhone = customerPhone,
             customerEmail = customerEmail,
+            customerAddress = customerAddress,
             title = title,
             description = description,
-            jobType = try { JobType.valueOf(jobType) } catch (e: Exception) { JobType.SERVICE },
-            status = try { JobStatus.valueOf(status) } catch (e: Exception) { JobStatus.PENDING },
+            jobType = try { JobType.valueOf(jobType) } catch (_: Exception) { JobType.SERVICE },
+            status = try { JobStatus.valueOf(status) } catch (_: Exception) { JobStatus.PENDING },
+            priority = try { JobPriority.valueOf(priority) } catch (_: Exception) { JobPriority.NORMAL },
             scheduledDate = scheduledDate,
             scheduledTime = scheduledTime,
             serviceAddress = serviceAddress,
             latitude = latitude,
             longitude = longitude,
             estimatedDuration = estimatedDuration,
+            travelDistance = travelDistance,
             acceptedAt = acceptedAt,
             enRouteStartTime = enRouteStartTime,
             startTime = startTime,
@@ -818,6 +523,7 @@ class JobCardRepositoryImpl @Inject constructor(
             pauseHistory = pauseHistory,
             cancelledAt = cancelledAt,
             cancellationReason = cancellationReason,
+            statusHistory = statusHistory,
             workPerformed = workPerformed,
             technicianNotes = technicianNotes,
             issuesEncountered = issuesEncountered,
@@ -828,8 +534,32 @@ class JobCardRepositoryImpl @Inject constructor(
             resourcesUsed = resourcesUsed,
             requiresFollowUp = requiresFollowUp,
             followUpNotes = followUpNotes,
+            customerRating = customerRating,
+            customerFeedback = customerFeedback,
             isSynced = isSynced,
+            lastSyncedAt = lastSyncedAt,
             isMyJob = isMyJob
         )
+    }
+
+    private fun parsePhotosToList(photosJson: String?): List<com.metroair.job_card_management.domain.model.PhotoWithNotes>? {
+        if (photosJson.isNullOrBlank() || photosJson == "null") return null
+        return try {
+            val jsonArray = org.json.JSONArray(photosJson)
+            val photosList = mutableListOf<com.metroair.job_card_management.domain.model.PhotoWithNotes>()
+            for (i in 0 until jsonArray.length()) {
+                when (val item = jsonArray.get(i)) {
+                    is String -> photosList.add(com.metroair.job_card_management.domain.model.PhotoWithNotes(uri = item))
+                    is org.json.JSONObject -> {
+                        val uri = item.getString("uri")
+                        val notes = item.optString("notes", null)?.takeIf { it.isNotEmpty() }
+                        photosList.add(com.metroair.job_card_management.domain.model.PhotoWithNotes(uri = uri, notes = notes))
+                    }
+                }
+            }
+            photosList.ifEmpty { null }
+        } catch (e: Exception) {
+            null
+        }
     }
 }

@@ -7,16 +7,19 @@ data class JobCard(
     val customerName: String = "",
     val customerPhone: String = "",
     val customerEmail: String? = null,
+    val customerAddress: String? = null,
     val title: String,
     val description: String?,
     val jobType: JobType,
     val status: JobStatus,
+    val priority: JobPriority = JobPriority.NORMAL,
     val scheduledDate: String?,
     val scheduledTime: String?,
     val serviceAddress: String?,
     val latitude: Double? = null,
     val longitude: Double? = null,
     val estimatedDuration: Int? = null, // minutes
+    val travelDistance: Double? = null,
     val acceptedAt: Long? = null,
     val enRouteStartTime: Long? = null,
     val startTime: Long? = null,
@@ -25,6 +28,7 @@ data class JobCard(
     val pauseHistory: String? = null,
     val cancelledAt: Long? = null,
     val cancellationReason: String? = null,
+    val statusHistory: String? = null,
     val workPerformed: String? = null,
     val technicianNotes: String? = null,
     val issuesEncountered: String? = null,
@@ -32,9 +36,12 @@ data class JobCard(
     val beforePhotos: List<PhotoWithNotes>? = null,
     val afterPhotos: List<PhotoWithNotes>? = null,
     val otherPhotos: List<PhotoWithNotes>? = null,
-    val resourcesUsed: String? = null,
+    val resourcesUsed: String? = null, // retained for compatibility with UI; normalized usage stored separately
     val requiresFollowUp: Boolean = false,
     val followUpNotes: String? = null,
+    val customerRating: Int? = null,
+    val customerFeedback: String? = null,
     val isSynced: Boolean = false,
-    val isMyJob: Boolean = false
+    val lastSyncedAt: Long? = null,
+    val isMyJob: Boolean = true // single-tech app; keep for compatibility with UI
 )

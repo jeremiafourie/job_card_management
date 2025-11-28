@@ -2,7 +2,8 @@ package com.metroair.job_card_management.data.repository
 
 import com.metroair.job_card_management.data.local.database.dao.FixedDao
 import com.metroair.job_card_management.data.local.database.dao.CurrentTechnicianDao
-import com.metroair.job_card_management.data.local.database.entities.FixedCheckoutEntity
+import com.metroair.job_card_management.data.local.database.dao.JobFixedAssetDao
+import com.metroair.job_card_management.data.local.database.entities.JobFixedAssetEntity
 import com.metroair.job_card_management.di.IoDispatcher
 import com.metroair.job_card_management.domain.model.Fixed
 import com.metroair.job_card_management.domain.model.FixedCheckout
@@ -37,12 +38,13 @@ interface FixedRepository {
     fun getCheckoutsForJob(jobId: Int): Flow<List<FixedCheckout>>
 }
 
-@Singleton
-class FixedRepositoryImpl @Inject constructor(
-    private val fixedDao: FixedDao,
-    private val currentTechnicianDao: CurrentTechnicianDao,
-    @IoDispatcher private val ioDispatcher: CoroutineDispatcher
-) : FixedRepository {
+    @Singleton
+    class FixedRepositoryImpl @Inject constructor(
+        private val fixedDao: FixedDao,
+        private val currentTechnicianDao: CurrentTechnicianDao,
+        private val jobFixedAssetDao: JobFixedAssetDao,
+        @IoDispatcher private val ioDispatcher: CoroutineDispatcher
+    ) : FixedRepository {
 
     override fun getAllFixed(): Flow<List<Fixed>> =
         fixedDao.getAllFixed()
@@ -66,7 +68,7 @@ class FixedRepositoryImpl @Inject constructor(
             .flowOn(ioDispatcher)
 
     override fun getFixedHistory(fixedId: Int): Flow<List<FixedCheckout>> =
-        fixedDao.getFixedHistory(fixedId)
+        jobFixedAssetDao.getHistoryForFixed(fixedId)
             .map { entities ->
                 entities.map { it.toDomainModel() }
             }
@@ -90,32 +92,28 @@ class FixedRepositoryImpl @Inject constructor(
                 return@withContext false
             }
 
-            // Get job details if jobId is provided
-            val jobNumber = if (jobId != null) {
-                // You might want to fetch job number from JobCardDao
-                "JOB${jobId}"
-            } else null
+            val statusHistoryJson = appendStatusEvent(fixed.statusHistory, status = "CHECKED_OUT", reason = reason, actor = technician.name)
 
-            val checkout = FixedCheckoutEntity(
+            val checkout = JobFixedAssetEntity(
                 fixedId = fixedId,
                 fixedCode = fixed.fixedCode,
                 fixedName = fixed.fixedName,
-                technicianId = technician.technicianId,
-                technicianName = technician.name,
                 reason = reason,
+                technicianId = technician.id,
+                technicianName = technician.name,
                 jobId = jobId,
-                jobNumber = jobNumber,
-                checkoutCondition = condition,
-                checkoutNotes = notes
+                condition = condition,
+                notes = notes
             )
 
-            val checkoutId = fixedDao.insertCheckout(checkout)
+            val checkoutId = jobFixedAssetDao.insertCheckout(checkout)
 
             // Update fixed availability
             fixedDao.updateFixedAvailability(
                 fixedId = fixedId,
                 isAvailable = false,
                 holder = technician.name,
+                statusHistory = statusHistoryJson,
                 timestamp = System.currentTimeMillis()
             )
 
@@ -131,22 +129,26 @@ class FixedRepositoryImpl @Inject constructor(
         notes: String?
     ): Boolean = withContext(ioDispatcher) {
         try {
-            val checkout = fixedDao.getCheckoutById(checkoutId)
-                ?: return@withContext false
+            val active = jobFixedAssetDao.getById(checkoutId) ?: return@withContext false
 
-            // Update checkout record
-            fixedDao.returnFixed(
-                checkoutId = checkoutId,
+            val updated = active.copy(
                 returnTime = System.currentTimeMillis(),
-                condition = condition,
-                notes = notes
+                returnCondition = condition,
+                notes = notes ?: active.notes
             )
+            jobFixedAssetDao.updateCheckout(updated)
 
             // Update fixed availability
             fixedDao.updateFixedAvailability(
-                fixedId = checkout.fixedId,
+                fixedId = active.fixedId,
                 isAvailable = true,
                 holder = null,
+                statusHistory = appendStatusEvent(
+                    fixedDao.getFixedById(active.fixedId)?.statusHistory ?: "[]",
+                    status = "AVAILABLE",
+                    reason = "Returned",
+                    actor = currentTechnicianDao.getCurrentTechnicianSync()?.name
+                ),
                 timestamp = System.currentTimeMillis()
             )
 
@@ -162,19 +164,20 @@ class FixedRepositoryImpl @Inject constructor(
         }
 
     override fun getActiveCheckoutsForCurrentTechnician(): Flow<List<FixedCheckout>> =
-        fixedDao.getAllActiveCheckouts()
+        jobFixedAssetDao.getActiveCheckouts()
             .map { entities ->
-                entities.mapNotNull { entity ->
-                    val currentTech = currentTechnicianDao.getCurrentTechnicianSync()
-                    if (currentTech != null && entity.technicianId == currentTech.technicianId) {
-                        entity.toDomainModel()
-                    } else null
+                val technician = currentTechnicianDao.getCurrentTechnicianSync()
+                if (technician == null) {
+                    emptyList()
+                } else {
+                    entities.filter { checkout -> checkout.technicianId == technician.id }
+                        .map { it.toDomainModel() }
                 }
             }
             .flowOn(ioDispatcher)
 
     override fun getCheckoutsForJob(jobId: Int): Flow<List<FixedCheckout>> =
-        fixedDao.getCheckoutsForJob(jobId)
+        jobFixedAssetDao.getCheckoutsForJob(jobId)
             .map { entities ->
                 entities.map { it.toDomainModel() }
             }
@@ -198,11 +201,12 @@ class FixedRepositoryImpl @Inject constructor(
             currentHolder = currentHolder,
             lastMaintenanceDate = lastMaintenanceDate,
             nextMaintenanceDate = nextMaintenanceDate,
-            notes = notes
+            notes = notes,
+            statusHistory = statusHistory
         )
     }
 
-    private fun FixedCheckoutEntity.toDomainModel(): FixedCheckout {
+    private fun JobFixedAssetEntity.toDomainModel(): FixedCheckout {
         return FixedCheckout(
             id = id,
             fixedId = fixedId,
@@ -214,9 +218,21 @@ class FixedRepositoryImpl @Inject constructor(
             returnTime = returnTime,
             reason = reason,
             jobId = jobId,
-            condition = checkoutCondition,
+            condition = condition,
             returnCondition = returnCondition,
-            notes = checkoutNotes ?: returnNotes
+            notes = notes
         )
+    }
+
+    private fun appendStatusEvent(existing: String?, status: String, reason: String? = null, actor: String? = null): String {
+        val array = try { org.json.JSONArray(existing ?: "[]") } catch (_: Exception) { org.json.JSONArray() }
+        val obj = org.json.JSONObject().apply {
+            put("status", status)
+            put("timestamp", System.currentTimeMillis())
+            reason?.let { put("reason", it) }
+            actor?.let { put("actor", it) }
+        }
+        array.put(obj)
+        return array.toString()
     }
 }

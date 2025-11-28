@@ -126,6 +126,7 @@ fun JobsScreen(
                                     JobStatus.BUSY -> "Busy"
                                     JobStatus.PAUSED -> "Paused"
                                     JobStatus.COMPLETED -> "Completed"
+                                    JobStatus.SIGNED -> "Signed"
                                     JobStatus.CANCELLED -> "Cancelled"
                                 })
                             },
@@ -285,6 +286,7 @@ fun JobCard(
                                 JobStatus.BUSY -> "Busy"
                                 JobStatus.PAUSED -> "Paused"
                                 JobStatus.COMPLETED -> "Completed"
+                                JobStatus.SIGNED -> "Signed"
                                 JobStatus.CANCELLED -> "Cancelled"
                             },
                             style = MaterialTheme.typography.labelSmall
@@ -300,6 +302,7 @@ fun JobCard(
                             JobStatus.BUSY -> MaterialTheme.colorScheme.primary
                             JobStatus.PAUSED -> MaterialTheme.colorScheme.errorContainer
                             JobStatus.COMPLETED -> MaterialTheme.colorScheme.surfaceVariant
+                            JobStatus.SIGNED -> MaterialTheme.colorScheme.surfaceVariant
                             JobStatus.CANCELLED -> MaterialTheme.colorScheme.errorContainer
                         },
                         labelColor = when(job.status) {

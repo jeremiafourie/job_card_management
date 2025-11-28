@@ -321,7 +321,6 @@ fun AssetsScreen(
                             items(currentAssets) { asset ->
                                 AssetCard(
                                     asset = asset,
-                                    onCheckoutTool = { viewModel.checkoutAsset(asset.id, asset.itemName, asset.itemCode) },
                                     onUseAsset = { quantity -> viewModel.useAsset(asset.id, quantity) }
                                 )
                             }
@@ -339,7 +338,6 @@ fun AssetsScreen(
                                 items(categoryAssets) { asset ->
                                     AssetCard(
                                         asset = asset,
-                                        onCheckoutTool = { viewModel.checkoutAsset(asset.id, asset.itemName, asset.itemCode) },
                                         onUseAsset = { quantity -> viewModel.useAsset(asset.id, quantity) }
                                     )
                                 }
@@ -391,7 +389,6 @@ fun AssetsScreen(
                         items(currentAssets.take(10)) { asset ->
                             AssetCard(
                                 asset = asset,
-                                onCheckoutTool = { viewModel.checkoutAsset(asset.id, asset.itemName, asset.itemCode) },
                                 onUseAsset = { quantity -> viewModel.useAsset(asset.id, quantity) }
                             )
                         }
@@ -434,7 +431,6 @@ fun AssetsScreen(
 @Composable
 fun AssetCard(
     asset: Asset,
-    onCheckoutTool: () -> Unit,
     onUseAsset: (Double) -> Unit
 ) {
     var showUseDialog by remember { mutableStateOf(false) }

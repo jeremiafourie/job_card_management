@@ -3,11 +3,14 @@ package com.metroair.job_card_management.di
 import android.content.Context
 import com.metroair.job_card_management.data.local.database.JobCardDatabase
 import com.metroair.job_card_management.data.local.database.dao.AssetDao
-import com.metroair.job_card_management.data.local.database.dao.FixedDao
 import com.metroair.job_card_management.data.local.database.dao.CurrentTechnicianDao
 import com.metroair.job_card_management.data.local.database.dao.CustomerDao
 import com.metroair.job_card_management.data.local.database.dao.JobCardDao
-import com.metroair.job_card_management.data.local.database.dao.ToolCheckoutDao
+import com.metroair.job_card_management.data.local.database.dao.FixedDao
+import com.metroair.job_card_management.data.local.database.dao.JobFixedAssetDao
+import com.metroair.job_card_management.data.local.database.dao.JobInventoryUsageDao
+import com.metroair.job_card_management.data.local.database.dao.JobPurchaseDao
+import com.metroair.job_card_management.data.local.database.dao.PurchaseReceiptDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -41,5 +44,14 @@ object DatabaseModule {
     fun provideCurrentTechnicianDao(database: JobCardDatabase): CurrentTechnicianDao = database.currentTechnicianDao()
 
     @Provides
-    fun provideToolCheckoutDao(database: JobCardDatabase): ToolCheckoutDao = database.toolCheckoutDao()
+    fun provideJobInventoryUsageDao(database: JobCardDatabase): JobInventoryUsageDao = database.jobInventoryUsageDao()
+
+    @Provides
+    fun provideJobFixedAssetDao(database: JobCardDatabase): JobFixedAssetDao = database.jobFixedAssetDao()
+
+    @Provides
+    fun provideJobPurchaseDao(database: JobCardDatabase): JobPurchaseDao = database.jobPurchaseDao()
+
+    @Provides
+    fun providePurchaseReceiptDao(database: JobCardDatabase): PurchaseReceiptDao = database.purchaseReceiptDao()
 }

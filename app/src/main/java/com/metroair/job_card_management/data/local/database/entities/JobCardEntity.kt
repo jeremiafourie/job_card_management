@@ -9,30 +9,46 @@ import androidx.room.PrimaryKey
     indices = [
         Index("status"),
         Index("scheduledDate"),
-        Index("isMyJob"),
-        Index(value = ["isMyJob", "status"])
+        Index("jobNumber", unique = true),
+        Index("priority"),
+        Index(value = ["status", "scheduledDate"])
     ]
 )
 data class JobCardEntity(
     @PrimaryKey val id: Int, // Server-side job ID
     val jobNumber: String,
+
+    // Customer Info (denormalized for offline use)
     val customerId: Int,
     val customerName: String,
     val customerPhone: String,
     val customerEmail: String? = null,
     val customerAddress: String,
-    val isMyJob: Boolean, // true = assigned to me, false = unassigned/available
+    val isMyJob: Boolean = true,
+
+    // Job Details
     val title: String,
     val description: String?,
     val jobType: String, // "INSTALLATION", "REPAIR", "SERVICE", "INSPECTION"
-    val status: String, // "AWAITING", "PENDING", "EN_ROUTE", "BUSY", "PAUSED", "COMPLETED", "CANCELLED"
+    val priority: String = "NORMAL",
+
+    // Status / workflow
+    val status: String, // current status for quick filtering
+    val statusHistory: String = "[]", // JSON array of status events
+
+    // Scheduling
     val scheduledDate: String?,
     val scheduledTime: String?,
     val estimatedDuration: Int? = null, // Duration in minutes
+
+    // Location
     val serviceAddress: String,
     val latitude: Double? = null,
     val longitude: Double? = null,
+    val travelDistance: Double? = null,
     val navigationUri: String? = null, // For launching navigation apps
+
+    // Time Tracking
     val acceptedAt: Long? = null, // When technician accepted the job
     val enRouteStartTime: Long? = null, // When EN_ROUTE status started
     val startTime: Long? = null, // When technician started the actual work (BUSY)
@@ -41,18 +57,32 @@ data class JobCardEntity(
     val pauseHistory: String? = null, // JSON array of pause events [{timestamp, reason, duration}]
     val cancelledAt: Long? = null, // When job was cancelled
     val cancellationReason: String? = null, // Reason for cancellation
+
+    // Work / Notes
     val workPerformed: String? = null,
     val technicianNotes: String? = null,
     val issuesEncountered: String? = null,
+
+    // Evidence
     val customerSignature: String? = null, // Base64 encoded signature
-    val beforePhotos: String? = null, // JSON array of photo paths
-    val afterPhotos: String? = null, // JSON array of photo paths
-    val otherPhotos: String? = null, // JSON array of photo paths for other/during work photos
-    val resourcesUsed: String? = null, // JSON string of resources used
+    val beforePhotos: String? = null, // JSON array of photo objects
+    val afterPhotos: String? = null, // JSON array of photo objects
+    val otherPhotos: String? = null, // JSON array of photo objects
+
+    // Resources / follow-up
+    val resourcesUsed: String? = null, // Kept for compatibility; normalized usage stored separately
     val requiresFollowUp: Boolean = false,
     val followUpNotes: String? = null,
+
+    // Feedback
+    val customerRating: Int? = null,
+    val customerFeedback: String? = null,
+
+    // Sync tracking
     val isSynced: Boolean = false,
     val lastSyncedAt: Long? = null,
+
+    // Metadata
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )

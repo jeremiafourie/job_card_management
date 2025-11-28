@@ -5,8 +5,8 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 @Entity(
-    tableName = "fixed",
-    indices = [Index(value = ["fixedCode"], unique = true)]
+    tableName = "fixed_assets",
+    indices = [Index(value = ["fixedCode"], unique = true), Index("fixedName"), Index("fixedType")]
 )
 data class FixedEntity(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
@@ -16,11 +16,14 @@ data class FixedEntity(
     val serialNumber: String? = null,
     val manufacturer: String? = null,
     val model: String? = null,
+    val statusHistory: String = "[]",
     val isAvailable: Boolean = true,
     val currentHolder: String? = null,
     val lastMaintenanceDate: Long? = null,
     val nextMaintenanceDate: Long? = null,
     val notes: String? = null,
+    val isSynced: Boolean = false,
+    val lastSyncedAt: Long? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )

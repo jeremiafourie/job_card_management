@@ -6,10 +6,14 @@ import androidx.lifecycle.viewModelScope
 import com.metroair.job_card_management.data.repository.JobCardRepository
 import com.metroair.job_card_management.data.repository.AssetRepository
 import com.metroair.job_card_management.data.repository.FixedRepository
+import com.metroair.job_card_management.data.repository.PurchaseRepository
 import com.metroair.job_card_management.domain.model.JobCard
 import com.metroair.job_card_management.domain.model.JobResource
 import com.metroair.job_card_management.domain.model.JobStatus
 import com.metroair.job_card_management.domain.model.FixedCheckout
+import com.metroair.job_card_management.domain.model.StatusEvent
+import com.metroair.job_card_management.domain.model.Purchase
+import com.metroair.job_card_management.domain.model.PurchaseReceipt
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -22,6 +26,7 @@ class JobDetailViewModel @Inject constructor(
     private val jobCardRepository: JobCardRepository,
     private val assetRepository: AssetRepository,
     private val fixedRepository: FixedRepository,
+    private val purchaseRepository: PurchaseRepository,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -58,6 +63,23 @@ class JobDetailViewModel @Inject constructor(
             initialValue = emptyList()
         )
 
+    val purchases: StateFlow<List<Purchase>> = purchaseRepository.getPurchasesForJob(jobId)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val statusHistory: StateFlow<List<StatusEvent>> = jobCard
+        .map { job ->
+            job?.statusHistory?.let { parseStatusHistory(it) } ?: emptyList()
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
     init {
         viewModelScope.launch {
             jobCard.filterNotNull().collect { job ->
@@ -68,7 +90,8 @@ class JobDetailViewModel @Inject constructor(
                         requiresFollowUp = job.requiresFollowUp,
                         followUpNotes = job.followUpNotes ?: "",
                         customerSignature = job.customerSignature,
-                        resources = parseResourcesJson(job.resourcesUsed)
+                        resources = parseResourcesJson(job.resourcesUsed),
+                        statusEvents = job.statusHistory?.let { parseStatusHistory(it) } ?: emptyList()
                     )
                 }
             }
@@ -194,6 +217,30 @@ class JobDetailViewModel @Inject constructor(
 
     fun clearMessage() {
         _uiState.update { it.copy(errorMessage = null, successMessage = null) }
+    }
+
+    fun addPurchase(vendor: String, total: Double, notes: String?, receiptUris: List<String>) {
+        viewModelScope.launch {
+            val success = purchaseRepository.addPurchase(
+                jobId = jobId,
+                vendor = vendor,
+                totalAmount = total,
+                notes = notes,
+                receiptUri = receiptUris.firstOrNull()
+            )
+            if (!success) {
+                _uiState.update { it.copy(errorMessage = "Failed to add purchase") }
+            }
+        }
+    }
+
+    fun updateReceipt(receiptId: Int, newUri: String?, notes: String?) {
+        viewModelScope.launch {
+            val success = purchaseRepository.updateReceipt(receiptId, newUri, notes)
+            if (!success) {
+                _uiState.update { it.copy(errorMessage = "Failed to update receipt") }
+            }
+        }
     }
 
     // Resource management
@@ -354,6 +401,24 @@ class JobDetailViewModel @Inject constructor(
         }
         return jsonArray.toString()
     }
+
+    private fun parseStatusHistory(historyJson: String): List<StatusEvent> {
+        return try {
+            val array = JSONArray(historyJson)
+            val list = mutableListOf<StatusEvent>()
+            for (i in 0 until array.length()) {
+                val obj = array.getJSONObject(i)
+                val status = JobStatus.valueOf(obj.getString("status"))
+                val ts = obj.optLong("timestamp")
+                val reason = obj.optString("reason", null)?.takeIf { it.isNotBlank() }
+                val signedBy = obj.optString("signed_by", null)?.takeIf { it.isNotBlank() }
+                list.add(StatusEvent(status = status, timestamp = ts, reason = reason, signedBy = signedBy))
+            }
+            list
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
 }
 
 data class JobDetailUiState(
@@ -363,6 +428,7 @@ data class JobDetailUiState(
     val requiresFollowUp: Boolean = false,
     val followUpNotes: String = "",
     val resources: List<JobResource> = emptyList(),
+    val statusEvents: List<StatusEvent> = emptyList(),
     val errorMessage: String? = null,
     val successMessage: String? = null,
     val isCompleted: Boolean = false

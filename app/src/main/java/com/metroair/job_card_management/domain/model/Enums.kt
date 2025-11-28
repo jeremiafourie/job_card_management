@@ -8,6 +8,7 @@ enum class JobStatus {
     BUSY,          // Technician is actively working on the job (only ONE per technician)
     PAUSED,        // Job temporarily paused (break, waiting for parts, etc.)
     COMPLETED,     // Job successfully completed
+    SIGNED,        // Customer signed off and job is locked
     CANCELLED      // Job cancelled
 }
 
@@ -16,4 +17,11 @@ enum class JobType {
     REPAIR,
     SERVICE,
     INSPECTION
+}
+
+enum class JobPriority {
+    LOW,
+    NORMAL,
+    HIGH,
+    URGENT
 }

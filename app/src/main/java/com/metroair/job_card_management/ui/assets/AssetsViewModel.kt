@@ -159,12 +159,6 @@ class AssetsViewModel @Inject constructor(
         }
     }
 
-    fun checkoutAsset(assetId: Int, itemName: String, itemCode: String) {
-        viewModelScope.launch {
-            assetRepository.checkoutTool(assetId, itemName, itemCode)
-        }
-    }
-
     // Fixed Asset operations
     fun checkoutFixed(
         fixedId: Int,

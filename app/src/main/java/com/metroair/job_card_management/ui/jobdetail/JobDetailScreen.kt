@@ -5,7 +5,26 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DirectionsCar
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Navigation
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,6 +37,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.metroair.job_card_management.domain.model.JobStatus
+import com.metroair.job_card_management.domain.model.Purchase
+import com.metroair.job_card_management.domain.model.PurchaseReceipt
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -43,11 +64,29 @@ fun JobDetailScreen(
     val availableAssets by viewModel.availableAssets.collectAsStateWithLifecycle()
     val availableFixed by viewModel.availableFixed.collectAsStateWithLifecycle()
     val fixedCheckouts by viewModel.fixedCheckouts.collectAsStateWithLifecycle()
+    val purchases by viewModel.purchases.collectAsStateWithLifecycle()
     var showSignatureDialog by remember { mutableStateOf(false) }
     var showResourceDialog by remember { mutableStateOf(false) }
+    var showPurchaseDialog by remember { mutableStateOf(false) }
     var showPhotoDialog by remember { mutableStateOf(false) }
     var showPauseDialog by remember { mutableStateOf(false) }
     var currentPhotoUri by remember { mutableStateOf<Uri?>(null) }
+    var purchaseVendor by remember { mutableStateOf("") }
+    var purchaseAmount by remember { mutableStateOf("") }
+    var purchaseNotes by remember { mutableStateOf("") }
+    var receiptUris by remember { mutableStateOf(listOf<String>()) }
+    var capturedReceiptUri by remember { mutableStateOf<Uri?>(null) }
+    var showReceiptCapture by remember { mutableStateOf(false) }
+    var editingReceipt: PurchaseReceipt? by remember { mutableStateOf(null) }
+    var showReceiptEditDialog by remember { mutableStateOf(false) }
+
+    val receiptPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            receiptUris = receiptUris + it.toString()
+        }
+    }
 
     // Handle navigation after completion
     LaunchedEffect(uiState.isCompleted) {
@@ -111,27 +150,52 @@ fun JobDetailScreen(
                                     fontWeight = FontWeight.Bold
                                 )
 
-                                // Status
-                                AssistChip(
-                                    onClick = { },
-                                    label = { Text(job.status.name.replace("_", " ")) },
-                                    leadingIcon = {
-                                        Icon(
-                                            Icons.Default.Schedule,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp)
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    // Priority badge
+                                    AssistChip(
+                                        onClick = { },
+                                        label = { Text(job.priority.name) },
+                                        leadingIcon = {
+                                            Icon(
+                                                Icons.Default.Flag,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        },
+                                        colors = AssistChipDefaults.assistChipColors(
+                                            containerColor = when (job.priority) {
+                                                com.metroair.job_card_management.domain.model.JobPriority.URGENT -> MaterialTheme.colorScheme.errorContainer
+                                                com.metroair.job_card_management.domain.model.JobPriority.HIGH -> MaterialTheme.colorScheme.tertiaryContainer
+                                                else -> MaterialTheme.colorScheme.surfaceVariant
+                                            }
                                         )
-                                    },
-                                    colors = when (job.status) {
-                                        JobStatus.BUSY -> AssistChipDefaults.assistChipColors(
-                                            containerColor = MaterialTheme.colorScheme.primaryContainer
-                                        )
-                                        JobStatus.COMPLETED -> AssistChipDefaults.assistChipColors(
-                                            containerColor = MaterialTheme.colorScheme.tertiaryContainer
-                                        )
-                                        else -> AssistChipDefaults.assistChipColors()
-                                    }
-                                )
+                                    )
+
+                                    // Status
+                                    AssistChip(
+                                        onClick = { },
+                                        label = { Text(job.status.name.replace("_", " ")) },
+                                        leadingIcon = {
+                                            Icon(
+                                                Icons.Default.Schedule,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        },
+                                        colors = when (job.status) {
+                                            JobStatus.BUSY -> AssistChipDefaults.assistChipColors(
+                                                containerColor = MaterialTheme.colorScheme.primaryContainer
+                                            )
+                                            JobStatus.COMPLETED, JobStatus.SIGNED -> AssistChipDefaults.assistChipColors(
+                                                containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                                            )
+                                            JobStatus.CANCELLED -> AssistChipDefaults.assistChipColors(
+                                                containerColor = MaterialTheme.colorScheme.errorContainer
+                                            )
+                                            else -> AssistChipDefaults.assistChipColors()
+                                        }
+                                    )
+                                }
                             }
 
                             Spacer(modifier = Modifier.height(12.dp))
@@ -256,6 +320,26 @@ fun JobDetailScreen(
                                     }
                                 }
                             }
+
+                            job.travelDistance?.let { distance ->
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.DirectionsCar,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = "Travel: ${"%.1f".format(distance)} km",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -359,6 +443,32 @@ fun JobDetailScreen(
                                     }
                                 }
                             }
+
+                            job.customerAddress?.let { addr ->
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                                    shape = MaterialTheme.shapes.small
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(12.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            Icons.Default.LocationOn,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(20.dp),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Text(
+                                            text = addr,
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -384,6 +494,51 @@ fun JobDetailScreen(
                             viewModel.updatePhotoNotes(photoUri, category, notes)
                         }
                     )
+                }
+
+                // Purchases Section
+                item {
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Purchases",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                IconButton(onClick = { showPurchaseDialog = true }) {
+                                    Icon(Icons.Default.Add, contentDescription = "Add Purchase")
+                                }
+                            }
+
+                            if (purchases.isEmpty()) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "No purchases recorded",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            } else {
+                                Spacer(modifier = Modifier.height(8.dp))
+                        purchases.forEachIndexed { index, purchase ->
+                            PurchaseRow(
+                                purchase = purchase,
+                                onReceiptClick = { receipt ->
+                                    editingReceipt = receipt
+                                    showReceiptEditDialog = true
+                                }
+                            )
+                            if (index != purchases.lastIndex) {
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                            }
+                        }
+                    }
+                }
+            }
                 }
 
                 // Resources Section
@@ -634,7 +789,7 @@ fun JobDetailScreen(
                                                 onClick = { showSignatureDialog = true },
                                                 modifier = Modifier.fillMaxWidth()
                                             ) {
-                                                Icon(Icons.Default.Edit, contentDescription = null)
+                                            Icon(Icons.Default.CheckCircle, contentDescription = null)
                                                 Spacer(modifier = Modifier.width(4.dp))
                                                 Text("Change Signature")
                                             }
@@ -644,7 +799,7 @@ fun JobDetailScreen(
                                             onClick = { showSignatureDialog = true },
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
-                                            Icon(Icons.Default.Draw, contentDescription = null)
+                                            Icon(Icons.Default.CheckCircle, contentDescription = null)
                                             Spacer(modifier = Modifier.width(4.dp))
                                             Text("Capture Signature *")
                                         }
@@ -690,7 +845,7 @@ fun JobDetailScreen(
                                 onClick = { viewModel.startJob() },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Icon(Icons.Default.Construction, contentDescription = null)
+                                Icon(Icons.Default.Check, contentDescription = null)
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text("Arrived - Begin Work")
                             }
@@ -783,6 +938,135 @@ fun JobDetailScreen(
         }
     }
 
+    // Add Purchase Dialog
+    if (showPurchaseDialog) {
+        AlertDialog(
+            onDismissRequest = { showPurchaseDialog = false },
+            title = { Text("Add Purchase") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = purchaseVendor,
+                        onValueChange = { purchaseVendor = it },
+                        label = { Text("Vendor") },
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = purchaseAmount,
+                        onValueChange = {
+                            if (it.isEmpty() || it.matches(Regex("^\\d*\\.?\\d*$"))) purchaseAmount = it
+                        },
+                        label = { Text("Total Amount") },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                        singleLine = true
+                    )
+                        OutlinedTextField(
+                            value = purchaseNotes,
+                            onValueChange = { purchaseNotes = it },
+                            label = { Text("Notes (optional)") },
+                            singleLine = false,
+                            maxLines = 3
+                        )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = {
+                                val (file, uri) = createImageFile(context)
+                                currentPhotoUri = uri
+                                capturedReceiptUri = uri
+                                showReceiptCapture = true
+                            }
+                        ) {
+                            Icon(Icons.Default.CameraAlt, contentDescription = null)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Capture")
+                        }
+                        OutlinedButton(
+                            onClick = { receiptPicker.launch("image/*") }
+                        ) {
+                            Icon(Icons.Default.Image, contentDescription = null)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Gallery")
+                        }
+                    }
+                    if (receiptUris.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Selected Receipts", style = MaterialTheme.typography.labelMedium)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        receiptUris.forEach { uri ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = uri,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                IconButton(onClick = {
+                                    receiptUris = receiptUris.filter { it != uri }
+                                }) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Remove")
+                                }
+                            }
+                        }
+                    }
+                    if (receiptUris.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Selected Receipt", style = MaterialTheme.typography.labelMedium)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        receiptUris.forEach { uri ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = uri,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                IconButton(onClick = {
+                                    receiptUris = receiptUris.filter { it != uri }
+                                }) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Remove")
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val amount = purchaseAmount.toDoubleOrNull()
+                        if (!purchaseVendor.isBlank() && amount != null) {
+                            viewModel.addPurchase(
+                                purchaseVendor.trim(),
+                                amount,
+                                purchaseNotes.ifBlank { null },
+                                receiptUris
+                            )
+                            showPurchaseDialog = false
+                            purchaseVendor = ""
+                            purchaseAmount = ""
+                            purchaseNotes = ""
+                            receiptUris = emptyList()
+                        }
+                    },
+                    enabled = purchaseVendor.isNotBlank() && (purchaseAmount.toDoubleOrNull() != null)
+                ) { Text("Add") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPurchaseDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     // Photo Capture Dialog
     if (showPhotoDialog && currentPhotoUri != null) {
         PhotoCaptureDialog(
@@ -801,6 +1085,26 @@ fun JobDetailScreen(
         )
     }
 
+    // Receipt Capture Dialog (reuse photo capture)
+    if (showReceiptCapture && capturedReceiptUri != null) {
+        PhotoCaptureDialog(
+            onDismiss = {
+                showReceiptCapture = false
+                capturedReceiptUri = null
+                currentPhotoUri = null
+            },
+            onPhotoSelected = { uri, _, _ ->
+                // For simplicity, keep a single receipt URI per purchase
+                receiptUris = listOf(uri.toString())
+                showReceiptCapture = false
+                capturedReceiptUri = null
+                currentPhotoUri = null
+            },
+            currentPhotoUri = capturedReceiptUri,
+            preselectedCategory = PhotoCategory.OTHER
+        )
+    }
+
     // Pause Dialog
     if (showPauseDialog) {
         ReasonDialog(
@@ -812,6 +1116,75 @@ fun JobDetailScreen(
             },
             onDismiss = { showPauseDialog = false }
         )
+    }
+}
+
+@Composable
+private fun PurchaseRow(purchase: Purchase, onReceiptClick: (PurchaseReceipt) -> Unit) {
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = purchase.vendor,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium
+                )
+                if (!purchase.notes.isNullOrBlank()) {
+                    Text(
+                        text = purchase.notes,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Text(
+                    text = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault())
+                        .format(java.util.Date(purchase.purchasedAt)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Text(
+                text = "R${"%.2f".format(purchase.totalAmount)}",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        if (purchase.receipts.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(4.dp))
+            purchase.receipts.forEach { receipt ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onReceiptClick(receipt) },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Receipt: ${receipt.uri}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (!receipt.notes.isNullOrBlank()) {
+                            Text(
+                                text = receipt.notes ?: "",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Icon(
+                        imageVector = Icons.Default.Schedule,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
     }
 }
 

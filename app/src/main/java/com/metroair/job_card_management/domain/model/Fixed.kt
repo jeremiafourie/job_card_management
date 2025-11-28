@@ -8,11 +8,12 @@ data class Fixed(
     val serialNumber: String? = null,
     val manufacturer: String? = null,
     val model: String? = null,
-    val isAvailable: Boolean = true,
+    val isAvailable: Boolean = true, // derived from latest status event
     val currentHolder: String? = null, // Technician name who has it
     val lastMaintenanceDate: Long? = null,
     val nextMaintenanceDate: Long? = null,
-    val notes: String? = null
+    val notes: String? = null,
+    val statusHistory: String? = null
 )
 
 enum class FixedType {

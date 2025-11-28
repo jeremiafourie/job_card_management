@@ -6,6 +6,8 @@ import com.metroair.job_card_management.data.repository.FixedRepository
 import com.metroair.job_card_management.data.repository.FixedRepositoryImpl
 import com.metroair.job_card_management.data.repository.JobCardRepository
 import com.metroair.job_card_management.data.repository.JobCardRepositoryImpl
+import com.metroair.job_card_management.data.repository.PurchaseRepository
+import com.metroair.job_card_management.data.repository.PurchaseRepositoryImpl
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -33,4 +35,10 @@ abstract class RepositoryModule {
     abstract fun bindFixedRepository(
         fixedRepositoryImpl: FixedRepositoryImpl
     ): FixedRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindPurchaseRepository(
+        purchaseRepositoryImpl: PurchaseRepositoryImpl
+    ): PurchaseRepository
 }

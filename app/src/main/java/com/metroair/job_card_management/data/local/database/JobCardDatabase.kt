@@ -7,18 +7,23 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.metroair.job_card_management.data.local.database.dao.AssetDao
-import com.metroair.job_card_management.data.local.database.dao.FixedDao
 import com.metroair.job_card_management.data.local.database.dao.CurrentTechnicianDao
 import com.metroair.job_card_management.data.local.database.dao.CustomerDao
+import com.metroair.job_card_management.data.local.database.dao.FixedDao
 import com.metroair.job_card_management.data.local.database.dao.JobCardDao
-import com.metroair.job_card_management.data.local.database.dao.ToolCheckoutDao
+import com.metroair.job_card_management.data.local.database.dao.JobFixedAssetDao
+import com.metroair.job_card_management.data.local.database.dao.JobInventoryUsageDao
+import com.metroair.job_card_management.data.local.database.dao.JobPurchaseDao
+import com.metroair.job_card_management.data.local.database.dao.PurchaseReceiptDao
 import com.metroair.job_card_management.data.local.database.entities.AssetEntity
-import com.metroair.job_card_management.data.local.database.entities.FixedEntity
-import com.metroair.job_card_management.data.local.database.entities.FixedCheckoutEntity
-import com.metroair.job_card_management.data.local.database.entities.CurrentTechnicianEntity
 import com.metroair.job_card_management.data.local.database.entities.CustomerEntity
+import com.metroair.job_card_management.data.local.database.entities.FixedEntity
 import com.metroair.job_card_management.data.local.database.entities.JobCardEntity
-import com.metroair.job_card_management.data.local.database.entities.ToolCheckoutEntity
+import com.metroair.job_card_management.data.local.database.entities.JobFixedAssetEntity
+import com.metroair.job_card_management.data.local.database.entities.JobInventoryUsageEntity
+import com.metroair.job_card_management.data.local.database.entities.JobPurchaseEntity
+import com.metroair.job_card_management.data.local.database.entities.PurchaseReceiptEntity
+import com.metroair.job_card_management.data.local.database.entities.TechnicianEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -29,12 +34,14 @@ import java.time.LocalDate
         JobCardEntity::class,
         CustomerEntity::class,
         AssetEntity::class,
-        CurrentTechnicianEntity::class,
-        ToolCheckoutEntity::class,
         FixedEntity::class,
-        FixedCheckoutEntity::class
+        TechnicianEntity::class,
+        JobInventoryUsageEntity::class,
+        JobFixedAssetEntity::class,
+        JobPurchaseEntity::class,
+        PurchaseReceiptEntity::class
     ],
-    version = 13, // Changed current asset quantities from Int to Double (INTEGER to REAL)
+    version = 20,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -45,7 +52,10 @@ abstract class JobCardDatabase : RoomDatabase() {
     abstract fun assetDao(): AssetDao
     abstract fun fixedDao(): FixedDao
     abstract fun currentTechnicianDao(): CurrentTechnicianDao
-    abstract fun toolCheckoutDao(): ToolCheckoutDao
+    abstract fun jobInventoryUsageDao(): JobInventoryUsageDao
+    abstract fun jobFixedAssetDao(): JobFixedAssetDao
+    abstract fun jobPurchaseDao(): JobPurchaseDao
+    abstract fun purchaseReceiptDao(): PurchaseReceiptDao
 
     companion object {
         @Volatile
@@ -58,13 +68,12 @@ abstract class JobCardDatabase : RoomDatabase() {
                     JobCardDatabase::class.java,
                     "jobcard_database"
                 )
-                    .fallbackToDestructiveMigration() // This will recreate the database if migration fails
+                    .fallbackToDestructiveMigration() // Clean reset/reseed approved
                     .addCallback(object : RoomDatabase.Callback() {
                         override fun onCreate(db: SupportSQLiteDatabase) {
                             super.onCreate(db)
-                            // Prepopulate with sample data
-                            INSTANCE?.let { database ->
-                                CoroutineScope(Dispatchers.IO).launch {
+                            CoroutineScope(Dispatchers.IO).launch {
+                                INSTANCE?.let { database ->
                                     populateSampleData(database)
                                 }
                             }
@@ -79,21 +88,16 @@ abstract class JobCardDatabase : RoomDatabase() {
         private suspend fun populateSampleData(database: JobCardDatabase) {
             val today = LocalDate.now().toString()
             val tomorrow = LocalDate.now().plusDays(1).toString()
-            val dayAfter = LocalDate.now().plusDays(2).toString()
             val yesterday = LocalDate.now().minusDays(1).toString()
 
-            // Current logged-in technician
-            val currentTechnician = CurrentTechnicianEntity(
+            // Current logged-in technician (singleton)
+            val currentTechnician = TechnicianEntity(
                 id = 1,
-                technicianId = 101,
-                employeeNumber = "EMP001",
+                username = "mike.wilson",
                 name = "Mike Wilson",
                 email = "mike.wilson@metroair.com",
                 phone = "0825551234",
-                specialization = "AC Installation & Repair",
-                authToken = "sample_auth_token_123",
-                isOnDuty = true,
-                totalJobsCompletedToday = 2
+                authToken = "sample_auth_token_123"
             )
 
             // Sample customers
@@ -150,9 +154,8 @@ abstract class JobCardDatabase : RoomDatabase() {
                 )
             )
 
-            // Sample job cards - Mix of my jobs and available jobs
+            // Sample job cards
             val jobCards = listOf(
-                // My current active job (BUSY status - only ONE allowed)
                 JobCardEntity(
                     id = 1001,
                     jobNumber = "JOB001",
@@ -161,21 +164,26 @@ abstract class JobCardDatabase : RoomDatabase() {
                     customerPhone = "0821234567",
                     customerEmail = "john@email.com",
                     customerAddress = "123 Main St, Sandton",
-                    isMyJob = true,
                     title = "AC Installation - Master Bedroom",
                     description = "Install new 12000 BTU split unit",
                     jobType = "INSTALLATION",
+                    priority = "HIGH",
                     status = "BUSY",
+                    statusHistory = """[
+                        {"status":"AVAILABLE","timestamp":${System.currentTimeMillis()-172800000}},
+                        {"status":"PENDING","timestamp":${System.currentTimeMillis()-86400000}},
+                        {"status":"EN_ROUTE","timestamp":${System.currentTimeMillis()-7200000}},
+                        {"status":"BUSY","timestamp":${System.currentTimeMillis()-3600000}}
+                    ]""".trimIndent(),
                     scheduledDate = today,
                     scheduledTime = "09:00",
                     estimatedDuration = 180,
                     serviceAddress = "123 Main St, Sandton",
                     latitude = -26.1076,
                     longitude = 28.0567,
-                    startTime = System.currentTimeMillis() - 3600000, // Started 1 hour ago
+                    startTime = System.currentTimeMillis() - 3600000,
                     isSynced = false
                 ),
-                // My awaiting job - assigned but not yet accepted
                 JobCardEntity(
                     id = 1002,
                     jobNumber = "JOB002",
@@ -184,10 +192,10 @@ abstract class JobCardDatabase : RoomDatabase() {
                     customerPhone = "0834567890",
                     customerEmail = "sarah.j@gmail.com",
                     customerAddress = "789 Oak Ave, Rosebank",
-                    isMyJob = true,
                     title = "AC Not Cooling - Urgent",
                     description = "Unit not cooling, possible gas leak",
                     jobType = "REPAIR",
+                    priority = "URGENT",
                     status = "AWAITING",
                     scheduledDate = today,
                     scheduledTime = "14:00",
@@ -197,7 +205,6 @@ abstract class JobCardDatabase : RoomDatabase() {
                     longitude = 28.0398,
                     isSynced = false
                 ),
-                // My pending job - accepted and ready to start
                 JobCardEntity(
                     id = 1003,
                     jobNumber = "JOB003",
@@ -206,7 +213,6 @@ abstract class JobCardDatabase : RoomDatabase() {
                     customerPhone = "0119876543",
                     customerEmail = "info@abc.co.za",
                     customerAddress = "456 Business Park, Midrand",
-                    isMyJob = true,
                     title = "Office AC Service",
                     description = "Annual service for 5 units",
                     jobType = "SERVICE",
@@ -219,7 +225,6 @@ abstract class JobCardDatabase : RoomDatabase() {
                     longitude = 28.1286,
                     isSynced = false
                 ),
-                // My completed job from yesterday
                 JobCardEntity(
                     id = 1004,
                     jobNumber = "JOB004",
@@ -228,11 +233,17 @@ abstract class JobCardDatabase : RoomDatabase() {
                     customerPhone = "0795551234",
                     customerEmail = null,
                     customerAddress = "555 Park Lane, Fourways",
-                    isMyJob = true,
                     title = "Gas Refill",
                     description = "Top up refrigerant",
                     jobType = "REPAIR",
-                    status = "COMPLETED",
+                    status = "SIGNED",
+                    statusHistory = """[
+                        {"status":"PENDING","timestamp":${System.currentTimeMillis()-90000000}},
+                        {"status":"EN_ROUTE","timestamp":${System.currentTimeMillis()-88000000}},
+                        {"status":"BUSY","timestamp":${System.currentTimeMillis()-87000000}},
+                        {"status":"COMPLETED","timestamp":${System.currentTimeMillis()-86000000}},
+                        {"status":"SIGNED","timestamp":${System.currentTimeMillis()-85500000},"signed_by":"David Miller"}
+                    ]""".trimIndent(),
                     scheduledDate = yesterday,
                     scheduledTime = "15:00",
                     estimatedDuration = 60,
@@ -244,9 +255,10 @@ abstract class JobCardDatabase : RoomDatabase() {
                     workPerformed = "Refilled 2kg R410A gas, tested cooling performance, all units working within normal parameters",
                     technicianNotes = "Customer advised to schedule regular maintenance",
                     resourcesUsed = "[{\"id\":1,\"name\":\"R410A Refrigerant Gas\",\"code\":\"GAS-R410A\",\"quantity\":2,\"unit\":\"kg\"}]",
+                    customerRating = 5,
+                    customerFeedback = "Great service, quick turnaround",
                     isSynced = true
                 ),
-                // Available job (unassigned) - technician can claim
                 JobCardEntity(
                     id = 1005,
                     jobNumber = "JOB005",
@@ -268,7 +280,6 @@ abstract class JobCardDatabase : RoomDatabase() {
                     longitude = 28.1886,
                     isSynced = false
                 ),
-                // Available urgent job
                 JobCardEntity(
                     id = 1006,
                     jobNumber = "JOB006",
@@ -290,7 +301,6 @@ abstract class JobCardDatabase : RoomDatabase() {
                     longitude = 28.0567,
                     isSynced = false
                 ),
-                // My completed job from today
                 JobCardEntity(
                     id = 1007,
                     jobNumber = "JOB007",
@@ -299,11 +309,17 @@ abstract class JobCardDatabase : RoomDatabase() {
                     customerPhone = "0119876543",
                     customerEmail = "info@abc.co.za",
                     customerAddress = "456 Business Park, Midrand",
-                    isMyJob = true,
                     title = "Replace Faulty Compressor",
                     description = "Compressor making noise and not cooling",
                     jobType = "REPAIR",
-                    status = "COMPLETED",
+                    status = "SIGNED",
+                    statusHistory = """[
+                        {"status":"PENDING","timestamp":${System.currentTimeMillis()-22000000}},
+                        {"status":"EN_ROUTE","timestamp":${System.currentTimeMillis()-21000000}},
+                        {"status":"BUSY","timestamp":${System.currentTimeMillis()-20000000}},
+                        {"status":"COMPLETED","timestamp":${System.currentTimeMillis()-19000000}},
+                        {"status":"SIGNED","timestamp":${System.currentTimeMillis()-18800000},"signed_by":"Facility Manager"}
+                    ]""".trimIndent(),
                     scheduledDate = today,
                     scheduledTime = "07:00",
                     estimatedDuration = 180,
@@ -318,14 +334,15 @@ abstract class JobCardDatabase : RoomDatabase() {
                     beforePhotos = "[\"photo1.jpg\",\"photo2.jpg\"]",
                     afterPhotos = "[\"photo3.jpg\",\"photo4.jpg\"]",
                     resourcesUsed = "[{\"id\":5,\"name\":\"Capacitor 35uF\",\"code\":\"CAPACITOR-35UF\",\"quantity\":1,\"unit\":\"piece\"},{\"id\":1,\"name\":\"R410A Refrigerant Gas\",\"code\":\"GAS-R410A\",\"quantity\":3,\"unit\":\"kg\"}]",
+                    customerRating = 4,
+                    customerFeedback = "Issue resolved, thanks",
                     isSynced = true
                 )
             )
 
-            // Sample assets/current inventory
+            // Sample inventory assets
             val assets = listOf(
                 AssetEntity(
-                    id = 1,
                     itemCode = "GAS-R410A",
                     itemName = "R410A Refrigerant Gas",
                     category = "Consumables",
@@ -334,7 +351,6 @@ abstract class JobCardDatabase : RoomDatabase() {
                     unitOfMeasure = "kg"
                 ),
                 AssetEntity(
-                    id = 2,
                     itemCode = "FILTER-UNI",
                     itemName = "Universal AC Filter",
                     category = "Parts",
@@ -343,7 +359,6 @@ abstract class JobCardDatabase : RoomDatabase() {
                     unitOfMeasure = "piece"
                 ),
                 AssetEntity(
-                    id = 3,
                     itemCode = "PIPE-COPPER-15",
                     itemName = "Copper Pipe 15mm",
                     category = "Parts",
@@ -352,7 +367,6 @@ abstract class JobCardDatabase : RoomDatabase() {
                     unitOfMeasure = "meter"
                 ),
                 AssetEntity(
-                    id = 4,
                     itemCode = "BRACKET-WALL",
                     itemName = "Wall Mounting Bracket",
                     category = "Parts",
@@ -361,7 +375,6 @@ abstract class JobCardDatabase : RoomDatabase() {
                     unitOfMeasure = "set"
                 ),
                 AssetEntity(
-                    id = 5,
                     itemCode = "CAPACITOR-35UF",
                     itemName = "Capacitor 35uF",
                     category = "Parts",
@@ -370,16 +383,6 @@ abstract class JobCardDatabase : RoomDatabase() {
                     unitOfMeasure = "piece"
                 ),
                 AssetEntity(
-                    id = 6,
-                    itemCode = "TOOL-GAUGE",
-                    itemName = "Manifold Gauge Set",
-                    category = "Tools",
-                    currentStock = 3.0,
-                    minimumStock = 2.0,
-                    unitOfMeasure = "set"
-                ),
-                AssetEntity(
-                    id = 7,
                     itemCode = "CLEANER-COIL",
                     itemName = "Coil Cleaning Solution",
                     category = "Consumables",
@@ -388,7 +391,6 @@ abstract class JobCardDatabase : RoomDatabase() {
                     unitOfMeasure = "bottle"
                 ),
                 AssetEntity(
-                    id = 8,
                     itemCode = "TAPE-INSUL",
                     itemName = "Insulation Tape",
                     category = "Consumables",
@@ -407,7 +409,10 @@ abstract class JobCardDatabase : RoomDatabase() {
                     serialNumber = "MG-2024-001",
                     manufacturer = "Fieldpiece",
                     model = "SM480V",
-                    isAvailable = true
+                    isAvailable = true,
+                    statusHistory = """[
+                        {"status":"AVAILABLE","timestamp":${System.currentTimeMillis()-200000000}}
+                    ]""".trimIndent()
                 ),
                 FixedEntity(
                     fixedCode = "TOOL-002",
@@ -416,7 +421,10 @@ abstract class JobCardDatabase : RoomDatabase() {
                     serialNumber = "RM-2024-002",
                     manufacturer = "Inficon",
                     model = "G5Twin",
-                    isAvailable = true
+                    isAvailable = true,
+                    statusHistory = """[
+                        {"status":"AVAILABLE","timestamp":${System.currentTimeMillis()-200000000}}
+                    ]""".trimIndent()
                 ),
                 FixedEntity(
                     fixedCode = "AC-001",
@@ -426,7 +434,10 @@ abstract class JobCardDatabase : RoomDatabase() {
                     manufacturer = "LG",
                     model = "LP1217GSR",
                     isAvailable = true,
-                    notes = "For temporary customer use"
+                    notes = "For temporary customer use",
+                    statusHistory = """[
+                        {"status":"AVAILABLE","timestamp":${System.currentTimeMillis()-200000000}}
+                    ]""".trimIndent()
                 ),
                 FixedEntity(
                     fixedCode = "AC-002",
@@ -436,7 +447,11 @@ abstract class JobCardDatabase : RoomDatabase() {
                     manufacturer = "Samsung",
                     model = "AX3000",
                     isAvailable = false,
-                    currentHolder = "John Technician"
+                    currentHolder = "John Technician",
+                    statusHistory = """[
+                        {"status":"AVAILABLE","timestamp":${System.currentTimeMillis()-200000000}},
+                        {"status":"CHECKED_OUT","timestamp":${System.currentTimeMillis()-86400000},"holder":"John Technician"}
+                    ]""".trimIndent()
                 ),
                 FixedEntity(
                     fixedCode = "LADDER-001",
@@ -445,7 +460,10 @@ abstract class JobCardDatabase : RoomDatabase() {
                     serialNumber = "LAD-2024-001",
                     manufacturer = "Werner",
                     model = "D1224-2",
-                    isAvailable = true
+                    isAvailable = true,
+                    statusHistory = """[
+                        {"status":"AVAILABLE","timestamp":${System.currentTimeMillis()-200000000}}
+                    ]""".trimIndent()
                 ),
                 FixedEntity(
                     fixedCode = "LADDER-002",
@@ -454,7 +472,10 @@ abstract class JobCardDatabase : RoomDatabase() {
                     serialNumber = "LAD-2024-002",
                     manufacturer = "Werner",
                     model = "FS108",
-                    isAvailable = true
+                    isAvailable = true,
+                    statusHistory = """[
+                        {"status":"AVAILABLE","timestamp":${System.currentTimeMillis()-200000000}}
+                    ]""".trimIndent()
                 ),
                 FixedEntity(
                     fixedCode = "TOOL-003",
@@ -463,7 +484,10 @@ abstract class JobCardDatabase : RoomDatabase() {
                     serialNumber = "VP-2024-001",
                     manufacturer = "Yellow Jacket",
                     model = "93600",
-                    isAvailable = true
+                    isAvailable = true,
+                    statusHistory = """[
+                        {"status":"AVAILABLE","timestamp":${System.currentTimeMillis()-200000000}}
+                    ]""".trimIndent()
                 ),
                 FixedEntity(
                     fixedCode = "METER-001",
@@ -472,7 +496,10 @@ abstract class JobCardDatabase : RoomDatabase() {
                     serialNumber = "DM-2024-001",
                     manufacturer = "Fluke",
                     model = "87V",
-                    isAvailable = true
+                    isAvailable = true,
+                    statusHistory = """[
+                        {"status":"AVAILABLE","timestamp":${System.currentTimeMillis()-200000000}}
+                    ]""".trimIndent()
                 ),
                 FixedEntity(
                     fixedCode = "TOOL-004",
@@ -481,7 +508,10 @@ abstract class JobCardDatabase : RoomDatabase() {
                     serialNumber = "LD-2024-001",
                     manufacturer = "Inficon",
                     model = "D-TEK 3",
-                    isAvailable = true
+                    isAvailable = true,
+                    statusHistory = """[
+                        {"status":"AVAILABLE","timestamp":${System.currentTimeMillis()-200000000}}
+                    ]""".trimIndent()
                 ),
                 FixedEntity(
                     fixedCode = "EQUIP-001",
@@ -491,19 +521,59 @@ abstract class JobCardDatabase : RoomDatabase() {
                     manufacturer = "Mastercool",
                     model = "62010",
                     isAvailable = true,
-                    notes = "30lb capacity"
+                    notes = "30lb capacity",
+                    statusHistory = """[
+                        {"status":"AVAILABLE","timestamp":${System.currentTimeMillis()-200000000}}
+                    ]""".trimIndent()
                 )
             )
 
-            // Insert all sample data
             database.currentTechnicianDao().setCurrentTechnician(currentTechnician)
             database.customerDao().insertAllCustomers(customers)
             database.jobCardDao().insertJobs(jobCards)
             database.assetDao().insertAllAssets(assets)
             database.fixedDao().insertFixedFixeds(fixedAssets)
 
-            // Set current active job ID for the technician
-            database.currentTechnicianDao().setCurrentActiveJob(1001)
+            // Sample purchases/receipts
+            val purchaseId1 = database.jobPurchaseDao().insertPurchase(
+                JobPurchaseEntity(
+                    jobId = 1001,
+                    vendor = "HVAC Parts Depot",
+                    totalAmount = 2450.0,
+                    notes = "Install kit, mounting brackets"
+                )
+            )
+            database.purchaseReceiptDao().insertReceipts(
+                listOf(
+                    PurchaseReceiptEntity(
+                        purchaseId = purchaseId1.toInt(),
+                        uri = "file:///receipts/receipt_install_001.jpg",
+                        mimeType = "image/jpeg",
+                        notes = "POS slip",
+                        capturedAt = System.currentTimeMillis() - 3600000
+                    )
+                )
+            )
+
+            val purchaseId2 = database.jobPurchaseDao().insertPurchase(
+                JobPurchaseEntity(
+                    jobId = 1004,
+                    vendor = "Metro HVAC Supply",
+                    totalAmount = 780.0,
+                    notes = "Gas refill, fittings"
+                )
+            )
+            database.purchaseReceiptDao().insertReceipts(
+                listOf(
+                    PurchaseReceiptEntity(
+                        purchaseId = purchaseId2.toInt(),
+                        uri = "file:///receipts/receipt_service_004.jpg",
+                        mimeType = "image/jpeg",
+                        notes = "Tax invoice",
+                        capturedAt = System.currentTimeMillis() - 82800000
+                    )
+                )
+            )
         }
     }
 }
