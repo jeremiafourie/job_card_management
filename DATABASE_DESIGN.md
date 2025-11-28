@@ -7,6 +7,7 @@
 - **Architecture**: MVVM + Repository, offline-first
 - **Sync flags**: `isSynced`/`lastSyncedAt` on mutable tables
 - **Status history**: Stored as JSON on `job_cards` and `fixed_assets` for full workflow/audit
+- **Media storage**: Photos/receipts stored as file URIs; JSON columns keep arrays of objects (uri + optional notes)
 
 ## Tables
 
@@ -185,3 +186,13 @@ CREATE TABLE purchase_receipts (
 - statusHistory is the source of truth for workflow; `status` is cached for fast filtering.
 - Inventory deductions happen on job completion when `job_inventory_usage` rows are inserted.
 - Fixed availability comes from `statusHistory` on `fixed_assets` plus open `job_fixed_assets` rows.
+- Media (photos/receipts) are persisted as files under app storage; URIs are stored in JSON (photos) or receipt rows. Consistency requires copying picked images into app storage (current PhotoCaptureDialog does this for photos; receipts reuse that flow).
+
+## Current Gaps / Improvements
+- Add Room migrations before production (currently destructive reset).
+- Normalize photos into tables (e.g., `job_photos` with category/notes) to avoid JSON parsing errors and simplify syncing.
+- Enforce unique receipt per purchase at DB level (currently app logic uses a single URI per purchase, but schema allows many).
+- Consider storing relative file paths (not content URIs) to improve portability/backup.
+- Add checksum/file size columns for media to detect corruption and aid sync.
+- Add `statusHistory` triggers or constraints via application layer to ensure monotonic workflow (Room doesn’t enforce).
+- Use `exportSchema=true` with versioned schema JSON for migration tests.
