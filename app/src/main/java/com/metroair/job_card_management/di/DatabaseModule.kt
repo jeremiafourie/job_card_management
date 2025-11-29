@@ -50,6 +50,4 @@ object DatabaseModule {
 
     @Provides
     fun provideJobPurchaseDao(database: JobCardDatabase): JobPurchaseDao = database.jobPurchaseDao()
-
-    @Provides
 }

@@ -5,7 +5,7 @@
 - **Version**: 23 (clean reset/reseed)
 - **ORM**: Room (AndroidX) with `fallbackToDestructiveMigration` (add migrations before production)
 - **Workflow source of truth**: `statusHistory` JSON on `job_cards` and `fixed_assets`
-- **Media**: Job photos stored as JSON arrays of `{ uri, notes }`; receipts stored on `job_purchases` as single receipt fields. Picked images are copied into app storage (receipts under `.../files/Pictures/receipts`).
+- **Media**: Job photos stored as JSON arrays of `{ uri, notes }` where URIs are FileProvider paths to app-managed copies (camera or gallery copies into `.../files/Pictures`). Receipts stored on `job_purchases` as single receipt fields in the same storage area.
 - **Single-tech app**: `technician` table holds the single logged-in user (id=1)
 
 ## Tables

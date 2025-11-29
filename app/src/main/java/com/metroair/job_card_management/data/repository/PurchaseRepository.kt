@@ -42,7 +42,7 @@ class PurchaseRepositoryImpl @Inject constructor(
     ): Boolean = withContext(ioDispatcher) {
         try {
             val now = System.currentTimeMillis()
-            val purchaseId = jobPurchaseDao.insertPurchase(
+            jobPurchaseDao.insertPurchase(
                 JobPurchaseEntity(
                     jobId = jobId,
                     vendor = vendor,

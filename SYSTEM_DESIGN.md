@@ -12,7 +12,7 @@ The **Job Card Management Application** is a mobile field service management sol
 ### Current Implementation Snapshot (v22)
 - Single-technician app; `technician` table is a singleton.
 - Job status, job timelines, and fixed-asset availability are driven by `statusHistory` JSON stored on `job_cards` and `fixed_assets`.
-- Photos are stored locally as JSON-encoded URIs; purchase receipts are single-file fields on each `job_purchase`, copied into app storage via FileProvider.
+- Photos are stored locally as JSON-encoded URIs pointing to app-managed copies (camera or gallery copied into app storage via FileProvider); purchase receipts are single-file fields on each `job_purchase` stored the same way.
 - Job creation is available from the Jobs list (“+”); new jobs start with a seeded status history per schema.
 - Consumables usage is tracked via `job_inventory_usage`; fixed-asset checkouts/returns append status events and maintain per-job checkout rows.
 - Migrations are destructive in this build (`fallbackToDestructiveMigration`); add real migrations before production.

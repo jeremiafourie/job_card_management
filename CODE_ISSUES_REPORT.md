@@ -6,12 +6,12 @@
 
 ## UX / Behavior
 - **Checkout feedback is slow**: UI waits for DB write; snackbar added, but no optimistic state. Consider optimistic update or loading state in lists.
-- **Media handling still JSON/URI-based**: Photos remain JSON arrays of URIs per schema; this can still break if content URIs expire. A future migration to a normalized media table with app-managed file paths would improve reliability.
 - **Preview/unused warnings**: Compose preview-only variables and unused parameters should be annotated with `@PreviewParameter`/`@Suppress("Unused")` or removed to keep builds warning-free.
 
 ## Data & Persistence
 - **Destructive migrations**: `fallbackToDestructiveMigration` wipes data on version bumps; real migrations and `exportSchema` are needed before production.
 - **JDK/compile target alignment**: Updated to Java 17, but ensure CI/toolchains are pinned to the same version to avoid surprises.
+- **Photos still serialized as JSON**: They now point to app-managed FileProvider URIs (copied into app storage), so expiry risk is low. A future migration to a normalized `job_photos` table would simplify querying/sync and remove JSON parsing.
 
 ## Documentation Gaps
 - Job creation flow and fixed-asset checkout UX are not documented; add to SYSTEM_DESIGN.md once implemented.
