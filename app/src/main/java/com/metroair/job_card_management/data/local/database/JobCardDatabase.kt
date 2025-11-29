@@ -14,7 +14,6 @@ import com.metroair.job_card_management.data.local.database.dao.JobCardDao
 import com.metroair.job_card_management.data.local.database.dao.JobFixedAssetDao
 import com.metroair.job_card_management.data.local.database.dao.JobInventoryUsageDao
 import com.metroair.job_card_management.data.local.database.dao.JobPurchaseDao
-import com.metroair.job_card_management.data.local.database.dao.PurchaseReceiptDao
 import com.metroair.job_card_management.data.local.database.entities.AssetEntity
 import com.metroair.job_card_management.data.local.database.entities.CustomerEntity
 import com.metroair.job_card_management.data.local.database.entities.FixedEntity
@@ -22,7 +21,6 @@ import com.metroair.job_card_management.data.local.database.entities.JobCardEnti
 import com.metroair.job_card_management.data.local.database.entities.JobFixedAssetEntity
 import com.metroair.job_card_management.data.local.database.entities.JobInventoryUsageEntity
 import com.metroair.job_card_management.data.local.database.entities.JobPurchaseEntity
-import com.metroair.job_card_management.data.local.database.entities.PurchaseReceiptEntity
 import com.metroair.job_card_management.data.local.database.entities.TechnicianEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -40,10 +38,9 @@ import java.time.LocalDate
         TechnicianEntity::class,
         JobInventoryUsageEntity::class,
         JobFixedAssetEntity::class,
-        JobPurchaseEntity::class,
-        PurchaseReceiptEntity::class
+        JobPurchaseEntity::class
     ],
-    version = 22,
+    version = 23,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -57,7 +54,6 @@ abstract class JobCardDatabase : RoomDatabase() {
     abstract fun jobInventoryUsageDao(): JobInventoryUsageDao
     abstract fun jobFixedAssetDao(): JobFixedAssetDao
     abstract fun jobPurchaseDao(): JobPurchaseDao
-    abstract fun purchaseReceiptDao(): PurchaseReceiptDao
 
     companion object {
         @Volatile
@@ -385,41 +381,29 @@ abstract class JobCardDatabase : RoomDatabase() {
             database.jobInventoryUsageDao().insertUsageList(inventoryUsage)
             fixedUsage.forEach { database.jobFixedAssetDao().insertCheckout(it) }
 
-            val purchaseId1 = database.jobPurchaseDao().insertPurchase(
+            database.jobPurchaseDao().insertPurchase(
                 JobPurchaseEntity(
                     jobId = 2001,
                     vendor = "HVAC Parts Depot",
                     totalAmount = 2450.0,
-                    notes = "Install kit, mounting brackets"
+                    notes = "Install kit, mounting brackets",
+                    receiptUri = sampleReceiptUri("jc-2024-001_install"),
+                    receiptMimeType = "image/jpeg",
+                    receiptCapturedAt = now - (25 * minute)
                 )
             ).toInt()
 
-            val purchaseId2 = database.jobPurchaseDao().insertPurchase(
+            database.jobPurchaseDao().insertPurchase(
                 JobPurchaseEntity(
                     jobId = 2003,
                     vendor = "Metro HVAC Supply",
                     totalAmount = 780.0,
-                    notes = "Filters and drain cleaner"
+                    notes = "Filters and drain cleaner",
+                    receiptUri = sampleReceiptUri("jc-2024-003_service"),
+                    receiptMimeType = "image/jpeg",
+                    receiptCapturedAt = now - (day * 6)
                 )
             ).toInt()
-
-            database.purchaseReceiptDao().insertReceipt(
-                PurchaseReceiptEntity(
-                    purchaseId = purchaseId1,
-                    uri = sampleReceiptUri("jc-2024-001_install"),
-                    mimeType = "image/jpeg",
-                    capturedAt = now - (25 * minute)
-                )
-            )
-
-            database.purchaseReceiptDao().insertReceipt(
-                PurchaseReceiptEntity(
-                    purchaseId = purchaseId2,
-                    uri = sampleReceiptUri("jc-2024-003_service"),
-                    mimeType = "image/jpeg",
-                    capturedAt = now - (day * 6)
-                )
-            )
         }
 
         private fun statusHistory(vararg events: StatusEvent): String {

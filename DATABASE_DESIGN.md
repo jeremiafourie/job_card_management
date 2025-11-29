@@ -2,10 +2,10 @@
 
 ## Overview
 - **Database**: `jobcard_database`
-- **Version**: 22 (clean reset/reseed)
+- **Version**: 23 (clean reset/reseed)
 - **ORM**: Room (AndroidX) with `fallbackToDestructiveMigration` (add migrations before production)
 - **Workflow source of truth**: `statusHistory` JSON on `job_cards` and `fixed_assets`
-- **Media**: Job photos stored as JSON arrays of `{ uri, notes }`; receipts stored in `purchase_receipts` rows. Picked images are copied into app storage (receipts under `.../files/Pictures/receipts`).
+- **Media**: Job photos stored as JSON arrays of `{ uri, notes }`; receipts stored on `job_purchases` as single receipt fields. Picked images are copied into app storage (receipts under `.../files/Pictures/receipts`).
 - **Single-tech app**: `technician` table holds the single logged-in user (id=1)
 
 ## Tables
@@ -19,8 +19,7 @@
 | `fixed_assets` | Tools/equipment | `fixedCode` (UQ), `fixedType`, `statusHistory`, `isAvailable`, `currentHolder` | Availability comes from latest status event + open checkouts |
 | `job_inventory_usage` | Consumables used per job | `jobId`, `inventoryId`, `quantity`, `unitOfMeasure`, `recordedAt` | Drives stock deductions |
 | `job_fixed_assets` | Fixed assets checked out per job | `jobId`, `fixedId`, `reason`, `checkoutTime`, `returnTime`, `condition` | Tracks who used what and when |
-| `job_purchases` | Purchases made for a job | `jobId`, `vendor`, `totalAmount`, `notes`, `purchasedAt` | One-to-one receipt expected in app logic |
-| `purchase_receipts` | Receipt file reference | `purchaseId`, `uri`, `mimeType`, `capturedAt` | One receipt per purchase enforced by repository |
+| `job_purchases` | Purchases made for a job | `jobId`, `vendor`, `totalAmount`, `notes`, `purchasedAt`, `receiptUri`, `receiptMimeType`, `receiptCapturedAt` | Receipt fields live on the purchase row (one-to-one) |
 
 ## Schema snippets
 
@@ -147,16 +146,10 @@ CREATE TABLE job_purchases (
     total_amount REAL NOT NULL,
     notes TEXT,
     purchased_at INTEGER NOT NULL,
+    receipt_uri TEXT,
+    receipt_mime_type TEXT,
+    receipt_captured_at INTEGER,
     FOREIGN KEY(job_id) REFERENCES job_cards(id) ON DELETE CASCADE
-);
-
-CREATE TABLE purchase_receipts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    purchase_id INTEGER NOT NULL,
-    uri TEXT NOT NULL,
-    mime_type TEXT,
-    captured_at INTEGER NOT NULL,
-    FOREIGN KEY(purchase_id) REFERENCES job_purchases(id) ON DELETE CASCADE
 );
 ```
 
@@ -169,6 +162,6 @@ CREATE TABLE purchase_receipts (
 ## Current Gaps / Improvement Ideas
 - Add Room migrations (currently destructive) and enable `exportSchema=true` for migration tests.
 - Normalize photos into a `job_photos` table (category + notes) to remove JSON handling and simplify sync/conflict resolution.
-- Add a unique index on `purchase_receipts.purchaseId` once one-to-one receipts are permanent.
+- Add a unique index on `job_purchases(id)` is implicit; receipt fields are single-instance. If multiple receipts are needed later, split into a dedicated table.
 - Store relative media paths (vs. full `file://` URIs) plus metadata (size/hash) to support backup/restore and sync validation.
 - Consider triggers or app-level validation to keep `statusHistory` monotonic and to reject out-of-order status changes.

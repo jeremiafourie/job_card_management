@@ -1,16 +1,12 @@
 package com.metroair.job_card_management.data.repository
 
 import com.metroair.job_card_management.data.local.database.dao.JobPurchaseDao
-import com.metroair.job_card_management.data.local.database.dao.PurchaseReceiptDao
 import com.metroair.job_card_management.data.local.database.entities.JobPurchaseEntity
-import com.metroair.job_card_management.data.local.database.entities.PurchaseReceiptEntity
 import com.metroair.job_card_management.di.IoDispatcher
 import com.metroair.job_card_management.domain.model.Purchase
-import com.metroair.job_card_management.domain.model.PurchaseReceipt
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -31,19 +27,11 @@ interface PurchaseRepository {
 @Singleton
 class PurchaseRepositoryImpl @Inject constructor(
     private val jobPurchaseDao: JobPurchaseDao,
-    private val purchaseReceiptDao: PurchaseReceiptDao,
     @IoDispatcher private val ioDispatcher: CoroutineDispatcher
 ) : PurchaseRepository {
 
-    override fun getPurchasesForJob(jobId: Int): Flow<List<Purchase>> = flow {
-        jobPurchaseDao.getPurchasesForJob(jobId).collect { purchases ->
-            val mapped = purchases.map { entity ->
-                val receipts = purchaseReceiptDao.getReceiptsForPurchaseSync(entity.id)
-                entity.toDomain(receipts)
-            }
-            emit(mapped)
-        }
-    }.flowOn(ioDispatcher)
+    override fun getPurchasesForJob(jobId: Int): Flow<List<Purchase>> =
+        jobPurchaseDao.getPurchasesForJob(jobId).map { entities -> entities.map { it.toDomain() } }
 
     override suspend fun addPurchase(
         jobId: Int,
@@ -53,24 +41,17 @@ class PurchaseRepositoryImpl @Inject constructor(
         receiptUri: String?
     ): Boolean = withContext(ioDispatcher) {
         try {
+            val now = System.currentTimeMillis()
             val purchaseId = jobPurchaseDao.insertPurchase(
                 JobPurchaseEntity(
                     jobId = jobId,
                     vendor = vendor,
                     totalAmount = totalAmount,
-                    notes = notes
+                    notes = notes,
+                    receiptUri = receiptUri,
+                    receiptCapturedAt = receiptUri?.let { now }
                 )
             )
-            if (!receiptUri.isNullOrBlank()) {
-                purchaseReceiptDao.clearForPurchase(purchaseId.toInt())
-                purchaseReceiptDao.insertReceipt(
-                    PurchaseReceiptEntity(
-                        purchaseId = purchaseId.toInt(),
-                        uri = receiptUri,
-                        capturedAt = System.currentTimeMillis()
-                    )
-                )
-            }
             true
         } catch (e: Exception) {
             false
@@ -80,14 +61,11 @@ class PurchaseRepositoryImpl @Inject constructor(
     override suspend fun replaceReceiptForPurchase(purchaseId: Int, receiptUri: String, mimeType: String?): Boolean =
         withContext(ioDispatcher) {
             try {
-                purchaseReceiptDao.clearForPurchase(purchaseId)
-                purchaseReceiptDao.insertReceipt(
-                    PurchaseReceiptEntity(
-                        purchaseId = purchaseId,
-                        uri = receiptUri,
-                        mimeType = mimeType,
-                        capturedAt = System.currentTimeMillis()
-                    )
+                jobPurchaseDao.updateReceipt(
+                    purchaseId = purchaseId,
+                    uri = receiptUri,
+                    mimeType = mimeType,
+                    capturedAt = System.currentTimeMillis()
                 )
                 true
             } catch (e: Exception) {
@@ -98,31 +76,23 @@ class PurchaseRepositoryImpl @Inject constructor(
     override suspend fun removeReceiptForPurchase(purchaseId: Int): Boolean =
         withContext(ioDispatcher) {
             try {
-                purchaseReceiptDao.clearForPurchase(purchaseId)
+                jobPurchaseDao.clearReceipt(purchaseId)
                 true
             } catch (e: Exception) {
                 false
             }
         }
 
-    private fun JobPurchaseEntity.toDomain(receipts: List<PurchaseReceiptEntity>): Purchase {
-        return Purchase(
+    private fun JobPurchaseEntity.toDomain(): Purchase =
+        Purchase(
             id = id,
             jobId = jobId,
             vendor = vendor,
             totalAmount = totalAmount,
             notes = notes,
             purchasedAt = purchasedAt,
-            receipts = receipts.map { it.toDomain() }
-        )
-    }
-
-    private fun PurchaseReceiptEntity.toDomain(): PurchaseReceipt =
-        PurchaseReceipt(
-            id = id,
-            purchaseId = purchaseId,
-            uri = uri,
-            mimeType = mimeType,
-            capturedAt = capturedAt
+            receiptUri = receiptUri,
+            receiptMimeType = receiptMimeType,
+            receiptCapturedAt = receiptCapturedAt
         )
 }

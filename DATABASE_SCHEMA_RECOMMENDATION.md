@@ -39,7 +39,7 @@ This report proposes a streamlined, well-structured database schema for the job 
 │       └──────► JOB_PURCHASES (new items purchased for job) ─────────────┘   │
 │                      │                                                       │
 │                      ▼                                                       │
-│                PURCHASE_RECEIPTS (receipt images/documents)                  │
+│                RECEIPT FIELDS on JOB_PURCHASES                               │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -571,7 +571,7 @@ CREATE INDEX idx_job_purchases_approval ON job_purchases(approval_status);
 
 **Integration Workflow:**
 1. Technician purchases item → creates `job_purchases` record
-2. Uploads receipt → creates `purchase_receipts` record
+2. Uploads receipt → updates receipt fields on `job_purchases`
 3. Manager reviews → sets `approval_status`
 4. If APPROVED + INVENTORY: increment existing stock or create new item
 5. If APPROVED + FIXED: create new fixed_assets record
@@ -579,38 +579,14 @@ CREATE INDEX idx_job_purchases_approval ON job_purchases(approval_status);
 
 ---
 
-### 3.8 PURCHASE_RECEIPTS
+### 3.8 PURCHASE RECEIPTS (embedded)
 
-Receipt documentation for purchases.
+Receipt metadata is stored directly on `job_purchases` (one receipt per purchase).
 
-```sql
-CREATE TABLE purchase_receipts (
-    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-    purchase_id         INTEGER NOT NULL,
-
-    -- Receipt File
-    file_path           TEXT NOT NULL,
-    file_type           TEXT NOT NULL,
-    file_size           INTEGER,
-
-    -- Metadata
-    uploaded_at         INTEGER NOT NULL,
-    notes               TEXT,
-
-    FOREIGN KEY (purchase_id) REFERENCES job_purchases(id) ON DELETE CASCADE
-);
-
-CREATE INDEX idx_receipts_purchase ON purchase_receipts(purchase_id);
-```
-
-| Field | Role |
-|-------|------|
-| `purchase_id` | Which purchase this receipt is for |
-| `file_path` | Local path to image/PDF (e.g., "/data/receipts/R-001.jpg") |
-| `file_type` | IMAGE \| PDF |
-| `file_size` | Size in bytes |
-| `uploaded_at` | When receipt was captured (timestamp) |
-| `notes` | Additional notes about receipt |
+**Receipt fields on `job_purchases`:**
+- `receipt_uri` (TEXT)
+- `receipt_mime_type` (TEXT)
+- `receipt_captured_at` (INTEGER)
 
 ---
 
@@ -624,7 +600,7 @@ CREATE INDEX idx_receipts_purchase ON purchase_receipts(purchase_id);
 | job_cards → job_inventory_usage | 1:N | One job consumes multiple items |
 | inventory_assets → job_inventory_usage | 1:N | One item used across many jobs |
 | job_cards → job_purchases | 1:N | One job may have multiple purchases |
-| job_purchases → purchase_receipts | 1:N | One purchase may have multiple receipts |
+| job_purchases | stores one receipt directly on the row |
 
 ---
 

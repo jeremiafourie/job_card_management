@@ -26,5 +26,8 @@ data class JobPurchaseEntity(
     val vendor: String,
     @ColumnInfo(name = "total_amount") val totalAmount: Double,
     val notes: String? = null,
-    @ColumnInfo(name = "purchased_at") val purchasedAt: Long = System.currentTimeMillis()
+    @ColumnInfo(name = "purchased_at") val purchasedAt: Long = System.currentTimeMillis(),
+    @ColumnInfo(name = "receipt_uri") val receiptUri: String? = null,
+    @ColumnInfo(name = "receipt_mime_type") val receiptMimeType: String? = null,
+    @ColumnInfo(name = "receipt_captured_at") val receiptCapturedAt: Long? = null
 )

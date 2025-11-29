@@ -79,7 +79,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.metroair.job_card_management.domain.model.JobStatus
 import com.metroair.job_card_management.domain.model.Purchase
-import com.metroair.job_card_management.domain.model.PurchaseReceipt
 import com.metroair.job_card_management.ui.components.AddJobMaterialDialog
 import com.metroair.job_card_management.ui.components.JobTimelineCard
 import com.metroair.job_card_management.ui.components.PhotoCaptureDialog
@@ -112,7 +111,7 @@ fun JobDetailScreen(
     var purchaseAmount by remember { mutableStateOf("") }
     var purchaseNotes by remember { mutableStateOf("") }
     var pendingReceiptPath by remember { mutableStateOf<String?>(null) }
-    var activeReceipt: PurchaseReceipt? by remember { mutableStateOf(null) }
+    var activeReceiptUri: String? by remember { mutableStateOf(null) }
     var activePurchase: Purchase? by remember { mutableStateOf(null) }
     var showReceiptActionDialog by remember { mutableStateOf(false) }
     var showMaterialDialog by remember { mutableStateOf(false) }
@@ -345,9 +344,9 @@ fun JobDetailScreen(
                                 purchases.forEachIndexed { index, purchase ->
                                     PurchaseRow(
                                         purchase,
-                                        onReceiptAction = { actionPurchase, receipt ->
+                                        onReceiptAction = { actionPurchase ->
                                             activePurchase = actionPurchase
-                                            activeReceipt = receipt
+                                            activeReceiptUri = actionPurchase.receiptUri
                                             showReceiptActionDialog = true
                                         }
                                     )
@@ -534,7 +533,7 @@ fun JobDetailScreen(
         AlertDialog(
             onDismissRequest = {
                 showReceiptActionDialog = false
-                activeReceipt = null
+                activeReceiptUri = null
                 activePurchase = null
             },
             title = { Text("Receipt options") },
@@ -542,16 +541,16 @@ fun JobDetailScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(activePurchase?.vendor.orEmpty(), style = MaterialTheme.typography.titleMedium)
                     Text(
-                        activeReceipt?.let { "Current: ${readableReceiptName(it.uri)}" } ?: "No receipt attached",
+                        activeReceiptUri?.let { "Current: ${readableReceiptName(it)}" } ?: "No receipt attached",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(
                             onClick = {
-                                activeReceipt?.let { openReceipt(context, it.uri) }
+                                activeReceiptUri?.let { openReceipt(context, it) }
                             },
-                            enabled = activeReceipt != null
+                            enabled = activeReceiptUri != null
                         ) {
                             Icon(Icons.Default.Image, contentDescription = null)
                             Spacer(modifier = Modifier.width(4.dp))
@@ -583,10 +582,10 @@ fun JobDetailScreen(
                             onClick = {
                                 activePurchase?.id?.let { viewModel.removeReceipt(it) }
                                 showReceiptActionDialog = false
-                                activeReceipt = null
+                                activeReceiptUri = null
                                 activePurchase = null
                             },
-                            enabled = activeReceipt != null
+                            enabled = activeReceiptUri != null
                         ) {
                             Icon(Icons.Default.Delete, contentDescription = null)
                             Spacer(modifier = Modifier.width(4.dp))
@@ -598,7 +597,7 @@ fun JobDetailScreen(
             confirmButton = {
                 TextButton(onClick = {
                     showReceiptActionDialog = false
-                    activeReceipt = null
+                    activeReceiptUri = null
                     activePurchase = null
                 }) { Text("Close") }
             }
@@ -678,7 +677,7 @@ fun ReasonDialog(title: String, message: String, onConfirm: (String) -> Unit, on
 }
 
 @Composable
-private fun PurchaseRow(purchase: Purchase, onReceiptAction: (Purchase, PurchaseReceipt?) -> Unit) {
+private fun PurchaseRow(purchase: Purchase, onReceiptAction: (Purchase) -> Unit) {
     Column {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Column(modifier = Modifier.weight(1f)) {
@@ -694,25 +693,22 @@ private fun PurchaseRow(purchase: Purchase, onReceiptAction: (Purchase, Purchase
             }
             Text("R${"%.2f".format(purchase.totalAmount)}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
         }
-        if (purchase.receipts.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(4.dp))
-            purchase.receipts.forEach { receipt ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onReceiptAction(purchase, receipt) },
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Receipt: ${readableReceiptName(receipt.uri)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Icon(Icons.Default.Schedule, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(modifier = Modifier.height(4.dp))
+        if (purchase.receiptUri != null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onReceiptAction(purchase) },
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Receipt: ${readableReceiptName(purchase.receiptUri)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+                Icon(Icons.Default.Schedule, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         } else {
-            Spacer(modifier = Modifier.height(4.dp))
-            TextButton(onClick = { onReceiptAction(purchase, null) }) { Text("Attach receipt") }
+            TextButton(onClick = { onReceiptAction(purchase) }) { Text("Attach receipt") }
         }
     }
 }

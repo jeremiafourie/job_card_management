@@ -7,13 +7,7 @@ data class Purchase(
     val totalAmount: Double,
     val notes: String? = null,
     val purchasedAt: Long,
-    val receipts: List<PurchaseReceipt> = emptyList()
-)
-
-data class PurchaseReceipt(
-    val id: Int = 0,
-    val purchaseId: Int,
-    val uri: String,
-    val mimeType: String? = null,
-    val capturedAt: Long
+    val receiptUri: String? = null,
+    val receiptMimeType: String? = null,
+    val receiptCapturedAt: Long? = null
 )
