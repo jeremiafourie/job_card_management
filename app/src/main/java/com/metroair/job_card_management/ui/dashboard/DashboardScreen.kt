@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -77,7 +78,7 @@ fun DashboardScreen(
                     modifier = Modifier.weight(1f),
                     title = "Available",
                     value = stats.availableJobs.toString(),
-                    icon = Icons.Default.Assignment,
+                    icon = Icons.AutoMirrored.Filled.Assignment,
                     color = MaterialTheme.colorScheme.primary,
                     onClick = { navController.navigate("jobs?status=AVAILABLE") }
                 )
@@ -125,7 +126,7 @@ fun DashboardScreen(
                     onCompleteClick = { navController.navigate("jobDetail/${job.id}") },
                     onPhotoClick = {
                         currentJobForPhoto = job
-                        val (file, uri) = createImageFile(context)
+                        val (_, uri) = createImageFile(context)
                         currentPhotoUri = uri
                         showPhotoDialog = true
                     },
@@ -234,8 +235,7 @@ fun DashboardScreen(
             },
             availableAssets = availableAssets,
             availableFixed = availableFixed,
-            jobNumber = currentJobForPhoto!!.jobNumber,
-            jobId = currentJobForPhoto!!.id
+            jobNumber = currentJobForPhoto!!.jobNumber
         )
     }
 

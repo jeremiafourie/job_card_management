@@ -54,33 +54,30 @@ fun UnifiedJobPhotosCard(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Before Photos Section
-            PhotoCategorySection(
-                title = "Before",
-                photos = beforePhotos,
-                category = "BEFORE",
-                onPhotoClick = { photo -> selectedPhoto = photo to "BEFORE" }
-            )
+    // Before Photos Section
+    PhotoCategorySection(
+        title = "Before",
+        photos = beforePhotos,
+        onPhotoClick = { photo -> selectedPhoto = photo to "BEFORE" }
+    )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // During Photos Section
-            PhotoCategorySection(
-                title = "During",
-                photos = duringPhotos,
-                category = "OTHER",
-                onPhotoClick = { photo -> selectedPhoto = photo to "OTHER" }
-            )
+    // During Photos Section
+    PhotoCategorySection(
+        title = "During",
+        photos = duringPhotos,
+        onPhotoClick = { photo -> selectedPhoto = photo to "OTHER" }
+    )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // After Photos Section
-            PhotoCategorySection(
-                title = "After",
-                photos = afterPhotos,
-                category = "AFTER",
-                onPhotoClick = { photo -> selectedPhoto = photo to "AFTER" }
-            )
+    // After Photos Section
+    PhotoCategorySection(
+        title = "After",
+        photos = afterPhotos,
+        onPhotoClick = { photo -> selectedPhoto = photo to "AFTER" }
+    )
         }
     }
 
@@ -110,7 +107,6 @@ fun UnifiedJobPhotosCard(
 private fun PhotoCategorySection(
     title: String,
     photos: List<PhotoWithNotes>,
-    category: String,
     onPhotoClick: (PhotoWithNotes) -> Unit
 ) {
     Column {

@@ -16,7 +16,7 @@ import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Notes
+import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -383,7 +383,7 @@ fun PhotoViewerDialog(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Icon(
-                            Icons.Default.Notes,
+                            Icons.AutoMirrored.Filled.Notes,
                             contentDescription = "Notes",
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(20.dp)

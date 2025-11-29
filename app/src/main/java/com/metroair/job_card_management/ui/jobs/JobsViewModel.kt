@@ -16,12 +16,14 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
 import javax.inject.Inject
 
 @HiltViewModel
+@OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 class JobsViewModel @Inject constructor(
-    private val jobCardRepository: JobCardRepository,
-    savedStateHandle: androidx.lifecycle.SavedStateHandle
+    private val jobCardRepository: JobCardRepository
 ) : ViewModel() {
 
     private val _selectedStatus = MutableStateFlow<JobStatus?>(null)
@@ -142,4 +144,26 @@ class JobsViewModel @Inject constructor(
             _uiMessage.value = if (success) "Job cancelled" else "Failed to cancel job"
         }
     }
+
+    suspend fun createJob(
+        jobNumber: String,
+        customerName: String,
+        customerPhone: String,
+        customerAddress: String,
+        title: String,
+        description: String?,
+        jobType: com.metroair.job_card_management.domain.model.JobType,
+        scheduledDate: String,
+        scheduledTime: String?
+    ): Int? = jobCardRepository.createJob(
+        jobNumber = jobNumber,
+        customerName = customerName,
+        customerPhone = customerPhone,
+        customerAddress = customerAddress,
+        title = title,
+        description = description,
+        jobType = jobType,
+        scheduledDate = scheduledDate,
+        scheduledTime = scheduledTime
+    )
 }

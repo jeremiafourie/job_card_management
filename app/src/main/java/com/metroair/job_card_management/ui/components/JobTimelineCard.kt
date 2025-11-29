@@ -115,7 +115,7 @@ private fun TimelineItem(
                         .height(32.dp)
                         .padding(vertical = 2.dp)
                 ) {
-                    Divider(
+                    HorizontalDivider(
                         modifier = Modifier.fillMaxHeight(),
                         thickness = 2.dp,
                         color = MaterialTheme.colorScheme.outlineVariant
@@ -221,7 +221,6 @@ private fun buildTimelineEvents(job: JobCard): List<TimelineEvent> {
                     color = Color(0xFFF44336),
                     details = event.reason
                 )
-                else -> null
             }
         }.filterNotNull().sortedBy { it.timestamp }
     }
@@ -244,8 +243,8 @@ private fun parseStatusHistory(historyJson: String?): List<StatusHistoryEvent> {
             val obj = arr.getJSONObject(idx)
             val status = try { JobStatus.valueOf(obj.getString("status")) } catch (_: Exception) { null } ?: return@mapNotNull null
             val ts = obj.optLong("timestamp", 0L)
-            val reason = obj.optString("reason", null)?.takeIf { it.isNotBlank() }
-            val signedBy = obj.optString("signed_by", null)?.takeIf { it.isNotBlank() }
+            val reason = if (obj.has("reason")) obj.optString("reason").takeIf { it.isNotBlank() } else null
+            val signedBy = if (obj.has("signed_by")) obj.optString("signed_by").takeIf { it.isNotBlank() } else null
             StatusHistoryEvent(status, ts, reason, signedBy)
         }
     } catch (e: Exception) {

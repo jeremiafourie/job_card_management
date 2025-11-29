@@ -161,7 +161,7 @@ class JobDetailViewModel @Inject constructor(
                 jobId = jobId,
                 assetId = asset.id,
                 itemCode = asset.itemCode,
-                itemName = asset.itemName,
+                itemName = asset.itemName.ifBlank { itemName },
                 quantity = quantity,
                 unit = asset.unitOfMeasure
             )

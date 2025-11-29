@@ -33,8 +33,7 @@ fun AddJobMaterialDialog(
     onFixedAssetAdded: (Int, String) -> Unit, // fixedId, reason (checkout reason)
     availableAssets: List<Asset>,
     availableFixed: List<Fixed>,
-    jobNumber: String = "",
-    jobId: Int? = null
+    jobNumber: String = ""
 ) {
     var selectedTab by remember { mutableStateOf(0) } // 0 = Current, 1 = Fixed
     var searchQuery by remember { mutableStateOf("") }

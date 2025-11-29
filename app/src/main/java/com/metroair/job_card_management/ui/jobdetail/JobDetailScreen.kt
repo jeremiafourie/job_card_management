@@ -29,7 +29,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
@@ -154,7 +154,7 @@ fun JobDetailScreen(
                 title = { Text("Job #${jobCard?.jobNumber ?: ""}") },
                 navigationIcon = {
                     IconButton(onClick = { navController.navigateUp() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 }
             )
@@ -288,7 +288,7 @@ fun JobDetailScreen(
                         duringPhotos = job.otherPhotos ?: emptyList(),
                         afterPhotos = job.afterPhotos ?: emptyList(),
                         onAddPhoto = {
-                            val (file, uri) = createImageFile(context)
+                            val (_, uri) = createImageFile(context)
                             currentPhotoUri = uri
                             showPhotoDialog = true
                         },
@@ -488,7 +488,7 @@ fun JobDetailScreen(
                     OutlinedTextField(value = purchaseNotes, onValueChange = { purchaseNotes = it }, label = { Text("Notes (optional)") }, singleLine = false, maxLines = 3)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(onClick = {
-                            val (file, uri) = createReceiptFile(context)
+                            val (_, uri) = createReceiptFile(context)
                             receiptTargetPurchaseId = null
                             receiptCaptureUri = uri
                             showReceiptCapture = true
@@ -560,7 +560,7 @@ fun JobDetailScreen(
                         OutlinedButton(onClick = {
                             receiptTargetPurchaseId = activePurchase?.id
                             showReceiptActionDialog = false
-                            val (file, uri) = createReceiptFile(context)
+                            val (_, uri) = createReceiptFile(context)
                             receiptCaptureUri = uri
                             showReceiptCapture = true
                         }) {
@@ -620,8 +620,7 @@ fun JobDetailScreen(
             },
             availableAssets = availableAssets,
             availableFixed = availableFixed,
-            jobNumber = currentJob.jobNumber,
-            jobId = currentJob.id
+            jobNumber = currentJob.jobNumber
         )
     }
 }

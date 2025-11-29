@@ -54,6 +54,17 @@ interface JobCardRepository {
     suspend fun retagPhoto(jobId: Int, photoUri: String, fromCategory: String, toCategory: String): Boolean
     suspend fun updatePhotoNotes(jobId: Int, photoUri: String, category: String, notes: String): Boolean
     fun searchJobs(query: String): Flow<List<JobCard>>
+    suspend fun createJob(
+        jobNumber: String,
+        customerName: String,
+        customerPhone: String,
+        customerAddress: String,
+        title: String,
+        description: String?,
+        jobType: JobType,
+        scheduledDate: String,
+        scheduledTime: String?
+    ): Int?
 }
 
 @Singleton
@@ -359,6 +370,46 @@ class JobCardRepositoryImpl @Inject constructor(
             .map { entities -> entities.map { it.toDomainModel() } }
             .flowOn(ioDispatcher)
 
+    override suspend fun createJob(
+        jobNumber: String,
+        customerName: String,
+        customerPhone: String,
+        customerAddress: String,
+        title: String,
+        description: String?,
+        jobType: JobType,
+        scheduledDate: String,
+        scheduledTime: String?
+    ): Int? = withContext(ioDispatcher) {
+        return@withContext try {
+            val now = System.currentTimeMillis()
+            val entity = JobCardEntity(
+                id = (now / 1000L).toInt(),
+                jobNumber = jobNumber,
+                customerName = customerName,
+                customerPhone = customerPhone,
+                customerEmail = null,
+                customerAddress = customerAddress,
+                title = title,
+                description = description,
+                jobType = jobType.name,
+                priority = JobPriority.NORMAL.name,
+                statusHistory = appendStatusEvent("[]", JobStatus.AVAILABLE.name),
+                scheduledDate = scheduledDate,
+                scheduledTime = scheduledTime,
+                estimatedDuration = null,
+                serviceAddress = customerAddress,
+                latitude = null,
+                longitude = null,
+                travelDistance = null
+            )
+            jobCardDao.insertJob(entity)
+            entity.id
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     private fun appendStatusEvent(existing: String?, newStatus: String, reason: String? = null): String {
         val array = try { JSONArray(existing ?: "[]") } catch (_: Exception) { JSONArray() }
         val obj = JSONObject().apply {
@@ -484,7 +535,8 @@ class JobCardRepositoryImpl @Inject constructor(
             for (i in 0 until jsonArray.length()) {
                 val item = jsonArray.getJSONObject(i)
                 val uri = item.getString("uri")
-                val notes = item.optString("notes", null)?.takeIf { it.isNotEmpty() }
+                val notesRaw = if (item.has("notes")) item.optString("notes") else null
+                val notes = notesRaw?.takeIf { it.isNotBlank() }
                 photosList.add(com.metroair.job_card_management.domain.model.PhotoWithNotes(uri = uri, notes = notes))
             }
             photosList.ifEmpty { null }
