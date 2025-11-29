@@ -22,9 +22,10 @@ interface PurchaseRepository {
         vendor: String,
         totalAmount: Double,
         notes: String?,
-        receiptUri: String? = null
+        receiptUri: String?
     ): Boolean
-    suspend fun updateReceipt(receiptId: Int, newUri: String?, notes: String?): Boolean
+    suspend fun replaceReceiptForPurchase(purchaseId: Int, receiptUri: String, mimeType: String? = null): Boolean
+    suspend fun removeReceiptForPurchase(purchaseId: Int): Boolean
 }
 
 @Singleton
@@ -61,11 +62,11 @@ class PurchaseRepositoryImpl @Inject constructor(
                 )
             )
             if (!receiptUri.isNullOrBlank()) {
+                purchaseReceiptDao.clearForPurchase(purchaseId.toInt())
                 purchaseReceiptDao.insertReceipt(
                     PurchaseReceiptEntity(
                         purchaseId = purchaseId.toInt(),
                         uri = receiptUri,
-                        notes = null,
                         capturedAt = System.currentTimeMillis()
                     )
                 )
@@ -76,10 +77,28 @@ class PurchaseRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun updateReceipt(receiptId: Int, newUri: String?, notes: String?): Boolean =
+    override suspend fun replaceReceiptForPurchase(purchaseId: Int, receiptUri: String, mimeType: String?): Boolean =
         withContext(ioDispatcher) {
             try {
-                purchaseReceiptDao.updateReceipt(receiptId, newUri, null, notes)
+                purchaseReceiptDao.clearForPurchase(purchaseId)
+                purchaseReceiptDao.insertReceipt(
+                    PurchaseReceiptEntity(
+                        purchaseId = purchaseId,
+                        uri = receiptUri,
+                        mimeType = mimeType,
+                        capturedAt = System.currentTimeMillis()
+                    )
+                )
+                true
+            } catch (e: Exception) {
+                false
+            }
+        }
+
+    override suspend fun removeReceiptForPurchase(purchaseId: Int): Boolean =
+        withContext(ioDispatcher) {
+            try {
+                purchaseReceiptDao.clearForPurchase(purchaseId)
                 true
             } catch (e: Exception) {
                 false
@@ -104,7 +123,6 @@ class PurchaseRepositoryImpl @Inject constructor(
             purchaseId = purchaseId,
             uri = uri,
             mimeType = mimeType,
-            notes = notes,
             capturedAt = capturedAt
         )
 }

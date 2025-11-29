@@ -1,198 +1,174 @@
-# Database Design (v20, normalized reset)
+# Database Design (v22, schema recommendation applied)
 
 ## Overview
 - **Database**: `jobcard_database`
-- **Version**: 20 (clean reset/reseed)
-- **ORM**: Room (AndroidX)
-- **Architecture**: MVVM + Repository, offline-first
-- **Sync flags**: `isSynced`/`lastSyncedAt` on mutable tables
-- **Status history**: Stored as JSON on `job_cards` and `fixed_assets` for full workflow/audit
-- **Media storage**: Photos/receipts stored as file URIs; JSON columns keep arrays of objects (uri + optional notes)
+- **Version**: 22 (clean reset/reseed)
+- **ORM**: Room (AndroidX) with `fallbackToDestructiveMigration` (add migrations before production)
+- **Workflow source of truth**: `statusHistory` JSON on `job_cards` and `fixed_assets`
+- **Media**: Job photos stored as JSON arrays of `{ uri, notes }`; receipts stored in `purchase_receipts` rows. Picked images are copied into app storage (receipts under `.../files/Pictures/receipts`).
+- **Single-tech app**: `technician` table holds the single logged-in user (id=1)
 
 ## Tables
 
 | Table | Purpose | Key Fields | Notes |
 |-------|---------|------------|-------|
-| `technician` | Singleton current technician | `id=1`, `username`, `authToken` | Replaces legacy current_technician/technicians |
-| `customers` | Master customers | `name`, `phone`, `email`, `address` | Denormalized copies live in job cards |
-| `job_cards` | Core jobs | `jobNumber` (UQ), `status`, `priority`, `statusHistory`, photos, feedback | Status values: AVAILABLE, AWAITING, PENDING, EN_ROUTE, BUSY, PAUSED, COMPLETED, SIGNED, CANCELLED |
-| `inventory_assets` | Consumables/parts | `itemCode` (UQ), `currentStock`, `minimumStock`, `unitOfMeasure` | Low-stock based on `currentStock <= minimumStock` |
-| `fixed_assets` | Fixed assets/tools/equipment | `fixedCode` (UQ), `fixedType`, `statusHistory`, `isAvailable`, `currentHolder` | Availability derived from last status event |
-| `job_inventory_usage` | Consumables used per job | `jobId`, `inventoryId`, `quantity`, `unitOfMeasure` | Drives stock deductions |
-| `job_fixed_assets` | Fixed assets checked out per job | `jobId?`, `fixedId`, `reason`, `checkoutTime`, `returnTime`, `condition` | Tracks holder + return condition |
-| `job_purchases` | Purchases for a job | `jobId`, `vendor`, `totalAmount`, `purchasedAt` | |
-| `purchase_receipts` | Receipts attached to purchases | `purchaseId`, `uri`, `mimeType`, `notes`, `capturedAt` | |
+| `technician` | Singleton technician profile | `id=1`, `username`, `authToken`, `lastSyncTime` | Always exactly one row |
+| `customers` | Customer master data | `name`, `phone`, `email`, `address`, `area` | Job cards denormalize these for offline use |
+| `job_cards` | Core jobs | `jobNumber` (UQ), `statusHistory`, `priority`, photos, feedback | Status values: AVAILABLE, AWAITING, PENDING, EN_ROUTE, BUSY, PAUSED, COMPLETED, SIGNED, CANCELLED |
+| `inventory_assets` | Consumables/parts | `itemCode` (UQ), `currentStock`, `minimumStock`, `unitOfMeasure` | Low stock when `currentStock <= minimumStock` |
+| `fixed_assets` | Tools/equipment | `fixedCode` (UQ), `fixedType`, `statusHistory`, `isAvailable`, `currentHolder` | Availability comes from latest status event + open checkouts |
+| `job_inventory_usage` | Consumables used per job | `jobId`, `inventoryId`, `quantity`, `unitOfMeasure`, `recordedAt` | Drives stock deductions |
+| `job_fixed_assets` | Fixed assets checked out per job | `jobId`, `fixedId`, `reason`, `checkoutTime`, `returnTime`, `condition` | Tracks who used what and when |
+| `job_purchases` | Purchases made for a job | `jobId`, `vendor`, `totalAmount`, `notes`, `purchasedAt` | One-to-one receipt expected in app logic |
+| `purchase_receipts` | Receipt file reference | `purchaseId`, `uri`, `mimeType`, `capturedAt` | One receipt per purchase enforced by repository |
 
 ## Schema snippets
 
 ```sql
--- job_cards
 CREATE TABLE job_cards (
     id INTEGER PRIMARY KEY,
-    jobNumber TEXT NOT NULL UNIQUE,
-    customerId INTEGER NOT NULL,
-    customerName TEXT NOT NULL,
-    customerPhone TEXT NOT NULL,
-    customerEmail TEXT,
-    customerAddress TEXT NOT NULL,
+    job_number TEXT NOT NULL UNIQUE,
+    customer_name TEXT NOT NULL,
+    customer_phone TEXT NOT NULL,
+    customer_email TEXT,
     title TEXT NOT NULL,
     description TEXT,
-    jobType TEXT NOT NULL,
+    job_type TEXT NOT NULL,
     priority TEXT NOT NULL DEFAULT 'NORMAL',
-    status TEXT NOT NULL,
-    statusHistory TEXT NOT NULL DEFAULT '[]',
-    scheduledDate TEXT,
-    scheduledTime TEXT,
-    estimatedDuration INTEGER,
-    serviceAddress TEXT NOT NULL,
+    status_history TEXT NOT NULL DEFAULT '[]',
+    scheduled_date TEXT,
+    scheduled_time TEXT,
+    estimated_duration INTEGER,
+    service_address TEXT NOT NULL,
     latitude REAL,
     longitude REAL,
-    travelDistance REAL,
-    navigationUri TEXT,
-    acceptedAt INTEGER,
-    enRouteStartTime INTEGER,
-    startTime INTEGER,
-    endTime INTEGER,
-    pausedTime INTEGER,
-    pauseHistory TEXT,
-    cancelledAt INTEGER,
-    cancellationReason TEXT,
-    workPerformed TEXT,
-    technicianNotes TEXT,
-    issuesEncountered TEXT,
-    customerSignature TEXT,
-    beforePhotos TEXT,
-    afterPhotos TEXT,
-    otherPhotos TEXT,
-    resourcesUsed TEXT,
-    requiresFollowUp INTEGER NOT NULL DEFAULT 0,
-    followUpNotes TEXT,
-    customerRating INTEGER,
-    customerFeedback TEXT,
-    isSynced INTEGER NOT NULL DEFAULT 0,
-    lastSyncedAt INTEGER,
-    createdAt INTEGER NOT NULL,
-    updatedAt INTEGER NOT NULL
+    travel_distance REAL,
+    work_performed TEXT,
+    technician_notes TEXT,
+    issues_encountered TEXT,
+    customer_signature TEXT,
+    before_photos TEXT,
+    after_photos TEXT,
+    other_photos TEXT,
+    requires_follow_up INTEGER NOT NULL DEFAULT 0,
+    follow_up_notes TEXT,
+    customer_rating INTEGER,
+    customer_feedback TEXT,
+    is_synced INTEGER NOT NULL DEFAULT 0,
+    last_synced_at INTEGER,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
 );
-CREATE INDEX idx_job_cards_status_date ON job_cards(status, scheduledDate);
+CREATE INDEX idx_job_cards_status_date ON job_cards(scheduled_date);
 ```
 
 ```sql
--- inventory_assets
 CREATE TABLE inventory_assets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    itemCode TEXT NOT NULL UNIQUE,
-    itemName TEXT NOT NULL,
+    item_code TEXT NOT NULL UNIQUE,
+    item_name TEXT NOT NULL,
     category TEXT NOT NULL,
-    currentStock REAL NOT NULL,
-    minimumStock REAL NOT NULL,
-    unitOfMeasure TEXT NOT NULL,
-    isSynced INTEGER NOT NULL DEFAULT 0,
-    lastSyncedAt INTEGER,
-    createdAt INTEGER NOT NULL,
-    updatedAt INTEGER NOT NULL
+    current_stock REAL NOT NULL,
+    minimum_stock REAL NOT NULL,
+    unit_of_measure TEXT NOT NULL,
+    is_synced INTEGER NOT NULL DEFAULT 0,
+    last_synced_at INTEGER,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
 );
 CREATE INDEX idx_inventory_assets_category ON inventory_assets(category);
 ```
 
 ```sql
--- fixed_assets
 CREATE TABLE fixed_assets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    fixedCode TEXT NOT NULL UNIQUE,
-    fixedName TEXT NOT NULL,
-    fixedType TEXT NOT NULL,
-    serialNumber TEXT,
+    fixed_code TEXT NOT NULL UNIQUE,
+    fixed_name TEXT NOT NULL,
+    fixed_type TEXT NOT NULL,
+    serial_number TEXT,
     manufacturer TEXT,
     model TEXT,
-    statusHistory TEXT NOT NULL DEFAULT '[]',
-    isAvailable INTEGER NOT NULL DEFAULT 1,
-    currentHolder TEXT,
-    lastMaintenanceDate INTEGER,
-    nextMaintenanceDate INTEGER,
+    status_history TEXT NOT NULL DEFAULT '[]',
+    is_available INTEGER NOT NULL DEFAULT 1,
+    current_holder TEXT,
+    last_maintenance_date INTEGER,
+    next_maintenance_date INTEGER,
     notes TEXT,
-    isSynced INTEGER NOT NULL DEFAULT 0,
-    lastSyncedAt INTEGER,
-    createdAt INTEGER NOT NULL,
-    updatedAt INTEGER NOT NULL
+    is_synced INTEGER NOT NULL DEFAULT 0,
+    last_synced_at INTEGER,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
 );
 CREATE INDEX idx_fixed_assets_type ON fixed_assets(fixedType);
 ```
 
 ```sql
--- job_inventory_usage
 CREATE TABLE job_inventory_usage (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    jobId INTEGER NOT NULL,
-    inventoryId INTEGER NOT NULL,
-    itemCode TEXT NOT NULL,
-    itemName TEXT NOT NULL,
+    job_id INTEGER NOT NULL,
+    inventory_id INTEGER NOT NULL,
+    item_code TEXT NOT NULL,
+    item_name TEXT NOT NULL,
     quantity REAL NOT NULL,
-    unitOfMeasure TEXT NOT NULL,
-    recordedAt INTEGER NOT NULL,
-    FOREIGN KEY(jobId) REFERENCES job_cards(id) ON DELETE CASCADE,
-    FOREIGN KEY(inventoryId) REFERENCES inventory_assets(id) ON DELETE CASCADE
+    unit_of_measure TEXT NOT NULL,
+    recorded_at INTEGER NOT NULL,
+    FOREIGN KEY(job_id) REFERENCES job_cards(id) ON DELETE CASCADE,
+    FOREIGN KEY(inventory_id) REFERENCES inventory_assets(id) ON DELETE CASCADE
 );
-CREATE INDEX idx_job_inventory_usage_job ON job_inventory_usage(jobId);
+CREATE INDEX idx_job_inventory_usage_job ON job_inventory_usage(job_id);
 ```
 
 ```sql
--- job_fixed_assets
 CREATE TABLE job_fixed_assets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    jobId INTEGER,
-    fixedId INTEGER NOT NULL,
-    fixedCode TEXT NOT NULL,
-    fixedName TEXT NOT NULL,
+    job_id INTEGER,
+    fixed_id INTEGER NOT NULL,
+    fixed_code TEXT NOT NULL,
+    fixed_name TEXT NOT NULL,
     reason TEXT NOT NULL,
-    technicianId INTEGER NOT NULL,
-    technicianName TEXT NOT NULL,
-    checkoutTime INTEGER NOT NULL,
-    returnTime INTEGER,
+    technician_id INTEGER NOT NULL,
+    technician_name TEXT NOT NULL,
+    checkout_time INTEGER NOT NULL,
+    return_time INTEGER,
     condition TEXT NOT NULL DEFAULT 'Good',
-    returnCondition TEXT,
+    return_condition TEXT,
     notes TEXT,
-    FOREIGN KEY(jobId) REFERENCES job_cards(id) ON DELETE CASCADE,
-    FOREIGN KEY(fixedId) REFERENCES fixed_assets(id) ON DELETE CASCADE
+    FOREIGN KEY(job_id) REFERENCES job_cards(id) ON DELETE CASCADE,
+    FOREIGN KEY(fixed_id) REFERENCES fixed_assets(id) ON DELETE CASCADE
 );
-CREATE INDEX idx_job_fixed_assets_job ON job_fixed_assets(jobId);
+CREATE INDEX idx_job_fixed_assets_job ON job_fixed_assets(job_id);
 ```
 
 ```sql
--- job_purchases / purchase_receipts
 CREATE TABLE job_purchases (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    jobId INTEGER NOT NULL,
+    job_id INTEGER NOT NULL,
     vendor TEXT NOT NULL,
-    totalAmount REAL NOT NULL,
+    total_amount REAL NOT NULL,
     notes TEXT,
-    purchasedAt INTEGER NOT NULL,
-    FOREIGN KEY(jobId) REFERENCES job_cards(id) ON DELETE CASCADE
+    purchased_at INTEGER NOT NULL,
+    FOREIGN KEY(job_id) REFERENCES job_cards(id) ON DELETE CASCADE
 );
 
 CREATE TABLE purchase_receipts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    purchaseId INTEGER NOT NULL,
+    purchase_id INTEGER NOT NULL,
     uri TEXT NOT NULL,
-    mimeType TEXT,
-    notes TEXT,
-    capturedAt INTEGER NOT NULL,
-    FOREIGN KEY(purchaseId) REFERENCES job_purchases(id) ON DELETE CASCADE
+    mime_type TEXT,
+    captured_at INTEGER NOT NULL,
+    FOREIGN KEY(purchase_id) REFERENCES job_purchases(id) ON DELETE CASCADE
 );
 ```
 
 ## Notes / Policies
-- Clean reset is enabled via `fallbackToDestructiveMigration` (approved for current build); add migrations before production.
-- statusHistory is the source of truth for workflow; `status` is cached for fast filtering.
-- Inventory deductions happen on job completion when `job_inventory_usage` rows are inserted.
-- Fixed availability comes from `statusHistory` on `fixed_assets` plus open `job_fixed_assets` rows.
-- Media (photos/receipts) are persisted as files under app storage; URIs are stored in JSON (photos) or receipt rows. Consistency requires copying picked images into app storage (current PhotoCaptureDialog does this for photos; receipts reuse that flow).
+- App logic enforces one receipt per purchase by clearing previous rows before insert/update.
+- Gallery selections for receipts are copied into app storage; URIs persisted as FileProvider strings to avoid broken content links.
+- Job timeline pulls from `statusHistory`; resume/pause/start events append to that JSON trail.
+- Fixed-asset availability is derived from `statusHistory` plus open `job_fixed_assets` rows; the sample seed sets explicit status history.
 
-## Current Gaps / Improvements
-- Add Room migrations before production (currently destructive reset).
-- Normalize photos into tables (e.g., `job_photos` with category/notes) to avoid JSON parsing errors and simplify syncing.
-- Enforce unique receipt per purchase at DB level (currently app logic uses a single URI per purchase, but schema allows many).
-- Consider storing relative file paths (not content URIs) to improve portability/backup.
-- Add checksum/file size columns for media to detect corruption and aid sync.
-- Add `statusHistory` triggers or constraints via application layer to ensure monotonic workflow (Room doesn’t enforce).
-- Use `exportSchema=true` with versioned schema JSON for migration tests.
+## Current Gaps / Improvement Ideas
+- Add Room migrations (currently destructive) and enable `exportSchema=true` for migration tests.
+- Normalize photos into a `job_photos` table (category + notes) to remove JSON handling and simplify sync/conflict resolution.
+- Add a unique index on `purchase_receipts.purchaseId` once one-to-one receipts are permanent.
+- Store relative media paths (vs. full `file://` URIs) plus metadata (size/hash) to support backup/restore and sync validation.
+- Consider triggers or app-level validation to keep `statusHistory` monotonic and to reject out-of-order status changes.

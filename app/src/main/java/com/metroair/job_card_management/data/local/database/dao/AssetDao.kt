@@ -10,19 +10,19 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface AssetDao {
-    @Query("SELECT * FROM inventory_assets ORDER BY itemName")
+    @Query("SELECT * FROM inventory_assets ORDER BY item_name")
     fun getAllAssets(): Flow<List<AssetEntity>>
 
-    @Query("SELECT * FROM inventory_assets WHERE category = :category ORDER BY itemName")
+    @Query("SELECT * FROM inventory_assets WHERE category = :category ORDER BY item_name")
     fun getAssetsByCategory(category: String): Flow<List<AssetEntity>>
 
-    @Query("SELECT * FROM inventory_assets WHERE currentStock <= minimumStock")
+    @Query("SELECT * FROM inventory_assets WHERE current_stock <= minimum_stock")
     fun getLowStock(): Flow<List<AssetEntity>>
 
-    @Query("UPDATE inventory_assets SET currentStock = currentStock - :quantity, updatedAt = :timestamp WHERE id = :id")
+    @Query("UPDATE inventory_assets SET current_stock = current_stock - :quantity, updated_at = :timestamp WHERE id = :id")
     suspend fun useAsset(id: Int, quantity: Double, timestamp: Long = System.currentTimeMillis())
 
-    @Query("UPDATE inventory_assets SET currentStock = currentStock + :quantity, updatedAt = :timestamp WHERE id = :id")
+    @Query("UPDATE inventory_assets SET current_stock = current_stock + :quantity, updated_at = :timestamp WHERE id = :id")
     suspend fun restoreAsset(id: Int, quantity: Double, timestamp: Long = System.currentTimeMillis())
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

@@ -43,9 +43,7 @@ fun PhotoCaptureDialog(
     ) { success ->
         if (success && currentPhotoUri != null) {
             if (preselectedCategory != null) {
-                // If category is preselected, still show notes dialog
-                pendingPhotoUri = currentPhotoUri
-                showCategoryDialog = true
+                onPhotoSelected(currentPhotoUri, preselectedCategory, "")
             } else {
                 pendingPhotoUri = currentPhotoUri
                 showCategoryDialog = true
@@ -92,8 +90,7 @@ fun PhotoCaptureDialog(
                 )
 
                 if (preselectedCategory != null) {
-                    pendingPhotoUri = persistentUri
-                    showCategoryDialog = true
+                    onPhotoSelected(persistentUri, preselectedCategory, "")
                 } else {
                     pendingPhotoUri = persistentUri
                     showCategoryDialog = true

@@ -39,7 +39,6 @@ fun DashboardScreen(
     val uiMessage by viewModel.uiMessage.collectAsStateWithLifecycle()
     val availableAssets by viewModel.availableAssets.collectAsStateWithLifecycle()
     val availableFixed by viewModel.availableFixed.collectAsStateWithLifecycle()
-
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     var showPhotoDialog by remember { mutableStateOf(false) }
@@ -207,7 +206,7 @@ fun DashboardScreen(
                 currentJobForPhoto = null
             },
             onPhotoSelected = { uri, category, notes ->
-                viewModel.addPhotoToJob(currentJobForPhoto!!.id, uri, category, notes)
+                viewModel.addPhotoToJob(currentJobForPhoto!!.id, uri.toString(), category.name, notes)
                 showPhotoDialog = false
                 currentPhotoUri = null
                 currentJobForPhoto = null
@@ -239,6 +238,7 @@ fun DashboardScreen(
             jobId = currentJobForPhoto!!.id
         )
     }
+
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

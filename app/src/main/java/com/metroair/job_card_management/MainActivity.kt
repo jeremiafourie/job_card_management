@@ -66,7 +66,12 @@ fun MainScreen() {
             modifier = Modifier.padding(paddingValues)
         ) {
             composable("dashboard") { DashboardScreen(navController) }
-            composable("jobs") { JobsScreen(navController) }
+            composable("jobs") {
+                JobsScreen(
+                    onJobSelected = { jobId -> navController.navigate("jobDetail/$jobId") },
+                    onCreateJob = { /* TODO: navigate to job creation */ }
+                )
+            }
             composable(
                 route = "jobs?status={status}",
                 arguments = listOf(
@@ -76,7 +81,12 @@ fun MainScreen() {
                         defaultValue = null
                     }
                 )
-            ) { JobsScreen(navController) }
+            ) {
+                JobsScreen(
+                    onJobSelected = { jobId -> navController.navigate("jobDetail/$jobId") },
+                    onCreateJob = { /* TODO: navigate to job creation */ }
+                )
+            }
             composable("assets") { AssetsScreen() }
             composable("settings") { SettingsScreen() }
             composable(

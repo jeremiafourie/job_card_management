@@ -16,15 +16,18 @@ interface JobFixedAssetDao {
     @Update
     suspend fun updateCheckout(checkout: JobFixedAssetEntity)
 
-    @Query("SELECT * FROM job_fixed_assets WHERE jobId = :jobId ORDER BY checkoutTime DESC")
+    @Query("SELECT * FROM job_fixed_assets WHERE job_id = :jobId ORDER BY checkout_time DESC")
     fun getCheckoutsForJob(jobId: Int): Flow<List<JobFixedAssetEntity>>
 
-    @Query("SELECT * FROM job_fixed_assets WHERE returnTime IS NULL")
+    @Query("SELECT * FROM job_fixed_assets WHERE return_time IS NULL")
     fun getActiveCheckouts(): Flow<List<JobFixedAssetEntity>>
 
-    @Query("SELECT * FROM job_fixed_assets WHERE fixedId = :fixedId ORDER BY checkoutTime DESC")
+    @Query("SELECT * FROM job_fixed_assets WHERE fixed_id = :fixedId ORDER BY checkout_time DESC")
     fun getHistoryForFixed(fixedId: Int): Flow<List<JobFixedAssetEntity>>
 
     @Query("SELECT * FROM job_fixed_assets WHERE id = :checkoutId")
     suspend fun getById(checkoutId: Int): JobFixedAssetEntity?
+
+    @Query("SELECT * FROM job_fixed_assets WHERE fixed_id = :fixedId AND return_time IS NULL LIMIT 1")
+    suspend fun getOpenCheckoutForFixed(fixedId: Int): JobFixedAssetEntity?
 }

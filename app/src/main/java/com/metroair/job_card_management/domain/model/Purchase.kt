@@ -15,6 +15,5 @@ data class PurchaseReceipt(
     val purchaseId: Int,
     val uri: String,
     val mimeType: String? = null,
-    val notes: String? = null,
     val capturedAt: Long
 )

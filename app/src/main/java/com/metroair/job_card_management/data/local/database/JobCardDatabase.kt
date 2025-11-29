@@ -27,6 +27,8 @@ import com.metroair.job_card_management.data.local.database.entities.TechnicianE
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import org.json.JSONArray
+import org.json.JSONObject
 import java.time.LocalDate
 
 @Database(
@@ -41,7 +43,7 @@ import java.time.LocalDate
         JobPurchaseEntity::class,
         PurchaseReceiptEntity::class
     ],
-    version = 20,
+    version = 22,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -86,11 +88,14 @@ abstract class JobCardDatabase : RoomDatabase() {
         }
 
         private suspend fun populateSampleData(database: JobCardDatabase) {
-            val today = LocalDate.now().toString()
-            val tomorrow = LocalDate.now().plusDays(1).toString()
-            val yesterday = LocalDate.now().minusDays(1).toString()
+            val now = System.currentTimeMillis()
+            val minute = 60_000L
+            val hour = 60 * minute
+            val day = 24 * hour
 
-            // Current logged-in technician (singleton)
+            val today = LocalDate.now()
+            val yesterday = today.minusDays(1)
+
             val currentTechnician = TechnicianEntity(
                 id = 1,
                 username = "mike.wilson",
@@ -100,7 +105,6 @@ abstract class JobCardDatabase : RoomDatabase() {
                 authToken = "sample_auth_token_123"
             )
 
-            // Sample customers
             val customers = listOf(
                 CustomerEntity(
                     id = 1,
@@ -114,16 +118,6 @@ abstract class JobCardDatabase : RoomDatabase() {
                 ),
                 CustomerEntity(
                     id = 2,
-                    name = "ABC Company Ltd",
-                    phone = "0119876543",
-                    email = "info@abc.co.za",
-                    address = "456 Business Park, Midrand",
-                    area = "Midrand",
-                    notes = "Ask for reception",
-                    isSynced = true
-                ),
-                CustomerEntity(
-                    id = 3,
                     name = "Sarah Johnson",
                     phone = "0834567890",
                     email = "sarah.j@gmail.com",
@@ -133,216 +127,20 @@ abstract class JobCardDatabase : RoomDatabase() {
                     isSynced = true
                 ),
                 CustomerEntity(
-                    id = 4,
-                    name = "Tech Solutions Inc",
-                    phone = "0126543210",
-                    email = "support@techsol.co.za",
-                    address = "321 Innovation Hub, Centurion",
-                    area = "Centurion",
-                    notes = null,
-                    isSynced = true
-                ),
-                CustomerEntity(
-                    id = 5,
-                    name = "David Miller",
-                    phone = "0795551234",
-                    email = null,
-                    address = "555 Park Lane, Fourways",
-                    area = "Fourways",
-                    notes = "Beware of dogs",
+                    id = 3,
+                    name = "ABC Company Ltd",
+                    phone = "0119876543",
+                    email = "info@abc.co.za",
+                    address = "456 Business Park, Midrand",
+                    area = "Midrand",
+                    notes = "Ask for reception",
                     isSynced = true
                 )
             )
 
-            // Sample job cards
-            val jobCards = listOf(
-                JobCardEntity(
-                    id = 1001,
-                    jobNumber = "JOB001",
-                    customerId = 1,
-                    customerName = "John Smith",
-                    customerPhone = "0821234567",
-                    customerEmail = "john@email.com",
-                    customerAddress = "123 Main St, Sandton",
-                    title = "AC Installation - Master Bedroom",
-                    description = "Install new 12000 BTU split unit",
-                    jobType = "INSTALLATION",
-                    priority = "HIGH",
-                    status = "BUSY",
-                    statusHistory = """[
-                        {"status":"AVAILABLE","timestamp":${System.currentTimeMillis()-172800000}},
-                        {"status":"PENDING","timestamp":${System.currentTimeMillis()-86400000}},
-                        {"status":"EN_ROUTE","timestamp":${System.currentTimeMillis()-7200000}},
-                        {"status":"BUSY","timestamp":${System.currentTimeMillis()-3600000}}
-                    ]""".trimIndent(),
-                    scheduledDate = today,
-                    scheduledTime = "09:00",
-                    estimatedDuration = 180,
-                    serviceAddress = "123 Main St, Sandton",
-                    latitude = -26.1076,
-                    longitude = 28.0567,
-                    startTime = System.currentTimeMillis() - 3600000,
-                    isSynced = false
-                ),
-                JobCardEntity(
-                    id = 1002,
-                    jobNumber = "JOB002",
-                    customerId = 3,
-                    customerName = "Sarah Johnson",
-                    customerPhone = "0834567890",
-                    customerEmail = "sarah.j@gmail.com",
-                    customerAddress = "789 Oak Ave, Rosebank",
-                    title = "AC Not Cooling - Urgent",
-                    description = "Unit not cooling, possible gas leak",
-                    jobType = "REPAIR",
-                    priority = "URGENT",
-                    status = "AWAITING",
-                    scheduledDate = today,
-                    scheduledTime = "14:00",
-                    estimatedDuration = 90,
-                    serviceAddress = "789 Oak Ave, Rosebank, Complex B, Unit 15",
-                    latitude = -26.1450,
-                    longitude = 28.0398,
-                    isSynced = false
-                ),
-                JobCardEntity(
-                    id = 1003,
-                    jobNumber = "JOB003",
-                    customerId = 2,
-                    customerName = "ABC Company Ltd",
-                    customerPhone = "0119876543",
-                    customerEmail = "info@abc.co.za",
-                    customerAddress = "456 Business Park, Midrand",
-                    title = "Office AC Service",
-                    description = "Annual service for 5 units",
-                    jobType = "SERVICE",
-                    status = "PENDING",
-                    scheduledDate = tomorrow,
-                    scheduledTime = "08:30",
-                    estimatedDuration = 240,
-                    serviceAddress = "456 Business Park, Midrand",
-                    latitude = -25.9894,
-                    longitude = 28.1286,
-                    isSynced = false
-                ),
-                JobCardEntity(
-                    id = 1004,
-                    jobNumber = "JOB004",
-                    customerId = 5,
-                    customerName = "David Miller",
-                    customerPhone = "0795551234",
-                    customerEmail = null,
-                    customerAddress = "555 Park Lane, Fourways",
-                    title = "Gas Refill",
-                    description = "Top up refrigerant",
-                    jobType = "REPAIR",
-                    status = "SIGNED",
-                    statusHistory = """[
-                        {"status":"PENDING","timestamp":${System.currentTimeMillis()-90000000}},
-                        {"status":"EN_ROUTE","timestamp":${System.currentTimeMillis()-88000000}},
-                        {"status":"BUSY","timestamp":${System.currentTimeMillis()-87000000}},
-                        {"status":"COMPLETED","timestamp":${System.currentTimeMillis()-86000000}},
-                        {"status":"SIGNED","timestamp":${System.currentTimeMillis()-85500000},"signed_by":"David Miller"}
-                    ]""".trimIndent(),
-                    scheduledDate = yesterday,
-                    scheduledTime = "15:00",
-                    estimatedDuration = 60,
-                    serviceAddress = "555 Park Lane, Fourways",
-                    latitude = -26.0171,
-                    longitude = 28.0073,
-                    startTime = System.currentTimeMillis() - 86400000,
-                    endTime = System.currentTimeMillis() - 83000000,
-                    workPerformed = "Refilled 2kg R410A gas, tested cooling performance, all units working within normal parameters",
-                    technicianNotes = "Customer advised to schedule regular maintenance",
-                    resourcesUsed = "[{\"id\":1,\"name\":\"R410A Refrigerant Gas\",\"code\":\"GAS-R410A\",\"quantity\":2,\"unit\":\"kg\"}]",
-                    customerRating = 5,
-                    customerFeedback = "Great service, quick turnaround",
-                    isSynced = true
-                ),
-                JobCardEntity(
-                    id = 1005,
-                    jobNumber = "JOB005",
-                    customerId = 4,
-                    customerName = "Tech Solutions Inc",
-                    customerPhone = "0126543210",
-                    customerEmail = "support@techsol.co.za",
-                    customerAddress = "321 Innovation Hub, Centurion",
-                    isMyJob = false,
-                    title = "Preventive Maintenance",
-                    description = "Quarterly maintenance check for server room AC units",
-                    jobType = "SERVICE",
-                    status = "AVAILABLE",
-                    scheduledDate = tomorrow,
-                    scheduledTime = "10:00",
-                    estimatedDuration = 120,
-                    serviceAddress = "321 Innovation Hub, Centurion",
-                    latitude = -25.8607,
-                    longitude = 28.1886,
-                    isSynced = false
-                ),
-                JobCardEntity(
-                    id = 1006,
-                    jobNumber = "JOB006",
-                    customerId = 1,
-                    customerName = "John Smith",
-                    customerPhone = "0821234567",
-                    customerEmail = "john@email.com",
-                    customerAddress = "123 Main St, Sandton",
-                    isMyJob = false,
-                    title = "Emergency - No Cooling",
-                    description = "Complete AC failure in server room",
-                    jobType = "REPAIR",
-                    status = "AVAILABLE",
-                    scheduledDate = today,
-                    scheduledTime = "ASAP",
-                    estimatedDuration = 120,
-                    serviceAddress = "123 Main St, Sandton",
-                    latitude = -26.1076,
-                    longitude = 28.0567,
-                    isSynced = false
-                ),
-                JobCardEntity(
-                    id = 1007,
-                    jobNumber = "JOB007",
-                    customerId = 2,
-                    customerName = "ABC Company Ltd",
-                    customerPhone = "0119876543",
-                    customerEmail = "info@abc.co.za",
-                    customerAddress = "456 Business Park, Midrand",
-                    title = "Replace Faulty Compressor",
-                    description = "Compressor making noise and not cooling",
-                    jobType = "REPAIR",
-                    status = "SIGNED",
-                    statusHistory = """[
-                        {"status":"PENDING","timestamp":${System.currentTimeMillis()-22000000}},
-                        {"status":"EN_ROUTE","timestamp":${System.currentTimeMillis()-21000000}},
-                        {"status":"BUSY","timestamp":${System.currentTimeMillis()-20000000}},
-                        {"status":"COMPLETED","timestamp":${System.currentTimeMillis()-19000000}},
-                        {"status":"SIGNED","timestamp":${System.currentTimeMillis()-18800000},"signed_by":"Facility Manager"}
-                    ]""".trimIndent(),
-                    scheduledDate = today,
-                    scheduledTime = "07:00",
-                    estimatedDuration = 180,
-                    serviceAddress = "456 Business Park, Midrand",
-                    latitude = -25.9894,
-                    longitude = 28.1286,
-                    startTime = System.currentTimeMillis() - 21600000,
-                    endTime = System.currentTimeMillis() - 14400000,
-                    workPerformed = "Replaced faulty compressor unit, recharged system with R410A, tested all functions",
-                    technicianNotes = "Old compressor had burnt windings. Warranty claim possible.",
-                    customerSignature = "base64_signature_here",
-                    beforePhotos = "[\"photo1.jpg\",\"photo2.jpg\"]",
-                    afterPhotos = "[\"photo3.jpg\",\"photo4.jpg\"]",
-                    resourcesUsed = "[{\"id\":5,\"name\":\"Capacitor 35uF\",\"code\":\"CAPACITOR-35UF\",\"quantity\":1,\"unit\":\"piece\"},{\"id\":1,\"name\":\"R410A Refrigerant Gas\",\"code\":\"GAS-R410A\",\"quantity\":3,\"unit\":\"kg\"}]",
-                    customerRating = 4,
-                    customerFeedback = "Issue resolved, thanks",
-                    isSynced = true
-                )
-            )
-
-            // Sample inventory assets
             val assets = listOf(
                 AssetEntity(
+                    id = 1,
                     itemCode = "GAS-R410A",
                     itemName = "R410A Refrigerant Gas",
                     category = "Consumables",
@@ -351,6 +149,7 @@ abstract class JobCardDatabase : RoomDatabase() {
                     unitOfMeasure = "kg"
                 ),
                 AssetEntity(
+                    id = 2,
                     itemCode = "FILTER-UNI",
                     itemName = "Universal AC Filter",
                     category = "Parts",
@@ -359,6 +158,7 @@ abstract class JobCardDatabase : RoomDatabase() {
                     unitOfMeasure = "piece"
                 ),
                 AssetEntity(
+                    id = 3,
                     itemCode = "PIPE-COPPER-15",
                     itemName = "Copper Pipe 15mm",
                     category = "Parts",
@@ -367,42 +167,19 @@ abstract class JobCardDatabase : RoomDatabase() {
                     unitOfMeasure = "meter"
                 ),
                 AssetEntity(
+                    id = 4,
                     itemCode = "BRACKET-WALL",
                     itemName = "Wall Mounting Bracket",
                     category = "Parts",
                     currentStock = 8.0,
                     minimumStock = 5.0,
                     unitOfMeasure = "set"
-                ),
-                AssetEntity(
-                    itemCode = "CAPACITOR-35UF",
-                    itemName = "Capacitor 35uF",
-                    category = "Parts",
-                    currentStock = 12.0,
-                    minimumStock = 5.0,
-                    unitOfMeasure = "piece"
-                ),
-                AssetEntity(
-                    itemCode = "CLEANER-COIL",
-                    itemName = "Coil Cleaning Solution",
-                    category = "Consumables",
-                    currentStock = 10.25,
-                    minimumStock = 3.0,
-                    unitOfMeasure = "bottle"
-                ),
-                AssetEntity(
-                    itemCode = "TAPE-INSUL",
-                    itemName = "Insulation Tape",
-                    category = "Consumables",
-                    currentStock = 20.0,
-                    minimumStock = 10.0,
-                    unitOfMeasure = "roll"
                 )
             )
 
-            // Sample fixed assets
             val fixedAssets = listOf(
                 FixedEntity(
+                    id = 1,
                     fixedCode = "TOOL-001",
                     fixedName = "Digital Manifold Gauge Set",
                     fixedType = "TOOL",
@@ -410,50 +187,12 @@ abstract class JobCardDatabase : RoomDatabase() {
                     manufacturer = "Fieldpiece",
                     model = "SM480V",
                     isAvailable = true,
-                    statusHistory = """[
-                        {"status":"AVAILABLE","timestamp":${System.currentTimeMillis()-200000000}}
-                    ]""".trimIndent()
+                    statusHistory = statusHistory(
+                        StatusEvent("AVAILABLE", now - (day * 5))
+                    )
                 ),
                 FixedEntity(
-                    fixedCode = "TOOL-002",
-                    fixedName = "Recovery Machine",
-                    fixedType = "TOOL",
-                    serialNumber = "RM-2024-002",
-                    manufacturer = "Inficon",
-                    model = "G5Twin",
-                    isAvailable = true,
-                    statusHistory = """[
-                        {"status":"AVAILABLE","timestamp":${System.currentTimeMillis()-200000000}}
-                    ]""".trimIndent()
-                ),
-                FixedEntity(
-                    fixedCode = "AC-001",
-                    fixedName = "Portable AC Unit - 12000 BTU",
-                    fixedType = "AIR_CONDITIONER",
-                    serialNumber = "PAC-2024-001",
-                    manufacturer = "LG",
-                    model = "LP1217GSR",
-                    isAvailable = true,
-                    notes = "For temporary customer use",
-                    statusHistory = """[
-                        {"status":"AVAILABLE","timestamp":${System.currentTimeMillis()-200000000}}
-                    ]""".trimIndent()
-                ),
-                FixedEntity(
-                    fixedCode = "AC-002",
-                    fixedName = "Portable AC Unit - 18000 BTU",
-                    fixedType = "AIR_CONDITIONER",
-                    serialNumber = "PAC-2024-002",
-                    manufacturer = "Samsung",
-                    model = "AX3000",
-                    isAvailable = false,
-                    currentHolder = "John Technician",
-                    statusHistory = """[
-                        {"status":"AVAILABLE","timestamp":${System.currentTimeMillis()-200000000}},
-                        {"status":"CHECKED_OUT","timestamp":${System.currentTimeMillis()-86400000},"holder":"John Technician"}
-                    ]""".trimIndent()
-                ),
-                FixedEntity(
+                    id = 2,
                     fixedCode = "LADDER-001",
                     fixedName = "Extension Ladder - 24ft",
                     fixedType = "LADDER",
@@ -461,119 +200,271 @@ abstract class JobCardDatabase : RoomDatabase() {
                     manufacturer = "Werner",
                     model = "D1224-2",
                     isAvailable = true,
-                    statusHistory = """[
-                        {"status":"AVAILABLE","timestamp":${System.currentTimeMillis()-200000000}}
-                    ]""".trimIndent()
+                    currentHolder = null,
+                    statusHistory = statusHistory(
+                        StatusEvent("AVAILABLE", now - (day * 4))
+                    )
                 ),
                 FixedEntity(
-                    fixedCode = "LADDER-002",
-                    fixedName = "Step Ladder - 8ft",
-                    fixedType = "LADDER",
-                    serialNumber = "LAD-2024-002",
-                    manufacturer = "Werner",
-                    model = "FS108",
-                    isAvailable = true,
-                    statusHistory = """[
-                        {"status":"AVAILABLE","timestamp":${System.currentTimeMillis()-200000000}}
-                    ]""".trimIndent()
-                ),
-                FixedEntity(
-                    fixedCode = "TOOL-003",
+                    id = 3,
+                    fixedCode = "PUMP-001",
                     fixedName = "Vacuum Pump",
                     fixedType = "PUMP",
                     serialNumber = "VP-2024-001",
                     manufacturer = "Yellow Jacket",
                     model = "93600",
                     isAvailable = true,
-                    statusHistory = """[
-                        {"status":"AVAILABLE","timestamp":${System.currentTimeMillis()-200000000}}
-                    ]""".trimIndent()
+                    statusHistory = statusHistory(
+                        StatusEvent("AVAILABLE", now - (day * 5))
+                    )
+                )
+            )
+
+            val jobCards = listOf(
+                JobCardEntity(
+                    id = 2001,
+                    jobNumber = "JC-2024-001",
+                    customerName = "John Smith",
+                    customerPhone = "0821234567",
+                    customerEmail = "john@email.com",
+                    customerAddress = "123 Main St, Sandton",
+                    title = "Split AC Installation - Master Bedroom",
+                    description = "Install new 12000 BTU inverter with outdoor mounting and condensate management.",
+                    jobType = "INSTALLATION",
+                    priority = "HIGH",
+                    statusHistory = statusHistory(
+                        StatusEvent("AVAILABLE", now - (day * 3)),
+                        StatusEvent("AWAITING", now - (day * 2)),
+                        StatusEvent("PENDING", now - (day - hour)),
+                        StatusEvent("EN_ROUTE", now - (90 * minute)),
+                        StatusEvent("BUSY", now - (70 * minute)),
+                        StatusEvent("PAUSED", now - (40 * minute), reason = "Parts check"),
+                        StatusEvent("BUSY", now - (30 * minute))
+                    ),
+                    scheduledDate = today.toString(),
+                    scheduledTime = "09:00",
+                    estimatedDuration = 180,
+                    serviceAddress = "123 Main St, Sandton",
+                    latitude = -26.1076,
+                    longitude = 28.0567,
+                    travelDistance = 14.2,
+                    workPerformed = null,
+                    beforePhotos = photoList(
+                        PhotoItem("file:///storage/emulated/0/Android/data/com.metroair.job_card_management/files/Pictures/job2001_before_01.jpg", "Indoor mounting position"),
+                        PhotoItem("file:///storage/emulated/0/Android/data/com.metroair.job_card_management/files/Pictures/job2001_before_02.jpg", "Outdoor wall anchor check")
+                    ),
+                    otherPhotos = photoList(
+                        PhotoItem("file:///storage/emulated/0/Android/data/com.metroair.job_card_management/files/Pictures/job2001_during_01.jpg", "Condenser base install")
+                    ),
+                    isSynced = false
                 ),
-                FixedEntity(
-                    fixedCode = "METER-001",
-                    fixedName = "Digital Multimeter",
-                    fixedType = "METER",
-                    serialNumber = "DM-2024-001",
-                    manufacturer = "Fluke",
-                    model = "87V",
-                    isAvailable = true,
-                    statusHistory = """[
-                        {"status":"AVAILABLE","timestamp":${System.currentTimeMillis()-200000000}}
-                    ]""".trimIndent()
+                JobCardEntity(
+                    id = 2002,
+                    jobNumber = "JC-2024-002",
+                    customerName = "Sarah Johnson",
+                    customerPhone = "0834567890",
+                    customerEmail = "sarah.j@gmail.com",
+                    customerAddress = "789 Oak Ave, Rosebank",
+                    title = "Bedroom AC Not Cooling",
+                    description = "Unit cycling and not reaching setpoint, suspected low gas or blocked filter.",
+                    jobType = "REPAIR",
+                    priority = "URGENT",
+                    statusHistory = statusHistory(
+                        StatusEvent("AVAILABLE", now - (day * 2)),
+                        StatusEvent("AWAITING", now - (day / 2))
+                    ),
+                    scheduledDate = today.toString(),
+                    scheduledTime = "14:00",
+                    estimatedDuration = 90,
+                    serviceAddress = "789 Oak Ave, Rosebank, Complex B, Unit 15",
+                    latitude = -26.1450,
+                    longitude = 28.0398,
+                    travelDistance = 9.5,
+                    isSynced = false
                 ),
-                FixedEntity(
-                    fixedCode = "TOOL-004",
-                    fixedName = "Refrigerant Leak Detector",
-                    fixedType = "TOOL",
-                    serialNumber = "LD-2024-001",
-                    manufacturer = "Inficon",
-                    model = "D-TEK 3",
-                    isAvailable = true,
-                    statusHistory = """[
-                        {"status":"AVAILABLE","timestamp":${System.currentTimeMillis()-200000000}}
-                    ]""".trimIndent()
+                JobCardEntity(
+                    id = 2003,
+                    jobNumber = "JC-2024-003",
+                    customerName = "ABC Company Ltd",
+                    customerPhone = "0119876543",
+                    customerEmail = "info@abc.co.za",
+                    customerAddress = "456 Business Park, Midrand",
+                    title = "Office AC Service - Server Room",
+                    description = "Quarterly preventive maintenance for server room cooling.",
+                    jobType = "SERVICE",
+                    priority = "NORMAL",
+                    statusHistory = statusHistory(
+                        StatusEvent("AVAILABLE", now - (day * 7)),
+                        StatusEvent("PENDING", now - (day * 6)),
+                        StatusEvent("EN_ROUTE", now - (day * 6) + (2 * hour)),
+                        StatusEvent("BUSY", now - (day * 6) + (3 * hour)),
+                        StatusEvent("COMPLETED", now - (day * 6) + (6 * hour)),
+                        StatusEvent("SIGNED", now - (day * 6) + (7 * hour), signedBy = "Facility Manager")
+                    ),
+                    scheduledDate = yesterday.toString(),
+                    scheduledTime = "08:00",
+                    estimatedDuration = 240,
+                    serviceAddress = "456 Business Park, Midrand",
+                    latitude = -25.9894,
+                    longitude = 28.1286,
+                    travelDistance = 22.3,
+                    workPerformed = "Cleaned coils, replaced filters, tested airflow and condensate pump.",
+                    technicianNotes = "Server room kept online during service. No downtime.",
+                    afterPhotos = photoList(
+                        PhotoItem("file:///storage/emulated/0/Android/data/com.metroair.job_card_management/files/Pictures/job2003_after_01.jpg", "Filters replaced"),
+                        PhotoItem("file:///storage/emulated/0/Android/data/com.metroair.job_card_management/files/Pictures/job2003_after_02.jpg", "Condensate line cleared")
+                    ),
+                    customerRating = 5,
+                    customerFeedback = "Thanks for the fast service",
+                    isSynced = true
+                )
+            )
+
+            val inventoryUsage = listOf(
+                JobInventoryUsageEntity(
+                    jobId = 2001,
+                    inventoryId = 1,
+                    itemCode = "GAS-R410A",
+                    itemName = "R410A Refrigerant Gas",
+                    quantity = 2.5,
+                    unitOfMeasure = "kg",
+                    recordedAt = now - (20 * minute)
                 ),
-                FixedEntity(
-                    fixedCode = "EQUIP-001",
-                    fixedName = "Refrigerant Recovery Tank",
-                    fixedType = "EQUIPMENT",
-                    serialNumber = "RT-2024-001",
-                    manufacturer = "Mastercool",
-                    model = "62010",
-                    isAvailable = true,
-                    notes = "30lb capacity",
-                    statusHistory = """[
-                        {"status":"AVAILABLE","timestamp":${System.currentTimeMillis()-200000000}}
-                    ]""".trimIndent()
+                JobInventoryUsageEntity(
+                    jobId = 2001,
+                    inventoryId = 4,
+                    itemCode = "BRACKET-WALL",
+                    itemName = "Wall Mounting Bracket",
+                    quantity = 1.0,
+                    unitOfMeasure = "set",
+                    recordedAt = now - (25 * minute)
+                ),
+                JobInventoryUsageEntity(
+                    jobId = 2003,
+                    inventoryId = 2,
+                    itemCode = "FILTER-UNI",
+                    itemName = "Universal AC Filter",
+                    quantity = 2.0,
+                    unitOfMeasure = "piece",
+                    recordedAt = now - (day * 6)
+                )
+            )
+
+            val fixedUsage = listOf(
+                JobFixedAssetEntity(
+                    jobId = 2001,
+                    fixedId = 1,
+                    fixedCode = "TOOL-001",
+                    fixedName = "Digital Manifold Gauge Set",
+                    reason = "Commissioning pressures",
+                    technicianId = currentTechnician.id,
+                    technicianName = currentTechnician.name,
+                    checkoutTime = now - (80 * minute),
+                    returnTime = null,
+                    condition = "Good"
+                ),
+                JobFixedAssetEntity(
+                    jobId = 2001,
+                    fixedId = 2,
+                    fixedCode = "LADDER-001",
+                    fixedName = "Extension Ladder - 24ft",
+                    reason = "Outdoor unit mounting",
+                    technicianId = currentTechnician.id,
+                    technicianName = currentTechnician.name,
+                    checkoutTime = now - (90 * minute),
+                    returnTime = null,
+                    condition = "Good"
                 )
             )
 
             database.currentTechnicianDao().setCurrentTechnician(currentTechnician)
             database.customerDao().insertAllCustomers(customers)
-            database.jobCardDao().insertJobs(jobCards)
             database.assetDao().insertAllAssets(assets)
             database.fixedDao().insertFixedFixeds(fixedAssets)
+            database.jobCardDao().insertJobs(jobCards)
+            database.jobInventoryUsageDao().insertUsageList(inventoryUsage)
+            fixedUsage.forEach { database.jobFixedAssetDao().insertCheckout(it) }
 
-            // Sample purchases/receipts
             val purchaseId1 = database.jobPurchaseDao().insertPurchase(
                 JobPurchaseEntity(
-                    jobId = 1001,
+                    jobId = 2001,
                     vendor = "HVAC Parts Depot",
                     totalAmount = 2450.0,
                     notes = "Install kit, mounting brackets"
                 )
-            )
-            database.purchaseReceiptDao().insertReceipts(
-                listOf(
-                    PurchaseReceiptEntity(
-                        purchaseId = purchaseId1.toInt(),
-                        uri = "file:///receipts/receipt_install_001.jpg",
-                        mimeType = "image/jpeg",
-                        notes = "POS slip",
-                        capturedAt = System.currentTimeMillis() - 3600000
-                    )
-                )
-            )
+            ).toInt()
 
             val purchaseId2 = database.jobPurchaseDao().insertPurchase(
                 JobPurchaseEntity(
-                    jobId = 1004,
+                    jobId = 2003,
                     vendor = "Metro HVAC Supply",
                     totalAmount = 780.0,
-                    notes = "Gas refill, fittings"
+                    notes = "Filters and drain cleaner"
+                )
+            ).toInt()
+
+            database.purchaseReceiptDao().insertReceipt(
+                PurchaseReceiptEntity(
+                    purchaseId = purchaseId1,
+                    uri = sampleReceiptUri("jc-2024-001_install"),
+                    mimeType = "image/jpeg",
+                    capturedAt = now - (25 * minute)
                 )
             )
-            database.purchaseReceiptDao().insertReceipts(
-                listOf(
-                    PurchaseReceiptEntity(
-                        purchaseId = purchaseId2.toInt(),
-                        uri = "file:///receipts/receipt_service_004.jpg",
-                        mimeType = "image/jpeg",
-                        notes = "Tax invoice",
-                        capturedAt = System.currentTimeMillis() - 82800000
-                    )
+
+            database.purchaseReceiptDao().insertReceipt(
+                PurchaseReceiptEntity(
+                    purchaseId = purchaseId2,
+                    uri = sampleReceiptUri("jc-2024-003_service"),
+                    mimeType = "image/jpeg",
+                    capturedAt = now - (day * 6)
                 )
             )
         }
+
+        private fun statusHistory(vararg events: StatusEvent): String {
+            val array = JSONArray()
+            events.forEach { event ->
+                array.put(
+                    JSONObject().apply {
+                        put("status", event.status)
+                        put("timestamp", event.timestamp)
+                        event.reason?.let { put("reason", it) }
+                        event.signedBy?.let { put("signed_by", it) }
+                        event.holder?.let { put("holder", it) }
+                    }
+                )
+            }
+            return array.toString()
+        }
+
+        private fun photoList(vararg photos: PhotoItem): String {
+            val array = JSONArray()
+            photos.forEach { photo ->
+                array.put(
+                    JSONObject().apply {
+                        put("uri", photo.uri)
+                        photo.notes?.let { put("notes", it) }
+                    }
+                )
+            }
+            return array.toString()
+        }
+
+        private fun sampleReceiptUri(name: String) =
+            "file:///storage/emulated/0/Android/data/com.metroair.job_card_management/files/receipts/${name}.jpg"
+
+        private data class StatusEvent(
+            val status: String,
+            val timestamp: Long,
+            val reason: String? = null,
+            val signedBy: String? = null,
+            val holder: String? = null
+        )
+
+        private data class PhotoItem(
+            val uri: String,
+            val notes: String? = null
+        )
     }
 }

@@ -15,9 +15,9 @@ interface JobInventoryUsageDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertUsageList(usages: List<JobInventoryUsageEntity>)
 
-    @Query("SELECT * FROM job_inventory_usage WHERE jobId = :jobId ORDER BY recordedAt DESC")
+    @Query("SELECT * FROM job_inventory_usage WHERE job_id = :jobId ORDER BY recorded_at DESC")
     fun getUsageForJob(jobId: Int): Flow<List<JobInventoryUsageEntity>>
 
-    @Query("DELETE FROM job_inventory_usage WHERE jobId = :jobId")
+    @Query("DELETE FROM job_inventory_usage WHERE job_id = :jobId")
     suspend fun clearForJob(jobId: Int)
 }

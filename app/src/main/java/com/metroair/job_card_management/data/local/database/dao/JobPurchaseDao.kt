@@ -12,6 +12,6 @@ interface JobPurchaseDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPurchase(purchase: JobPurchaseEntity): Long
 
-    @Query("SELECT * FROM job_purchases WHERE jobId = :jobId ORDER BY purchasedAt DESC")
+    @Query("SELECT * FROM job_purchases WHERE job_id = :jobId ORDER BY purchased_at DESC")
     fun getPurchasesForJob(jobId: Int): Flow<List<JobPurchaseEntity>>
 }

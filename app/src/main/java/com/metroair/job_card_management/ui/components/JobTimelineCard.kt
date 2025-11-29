@@ -21,7 +21,6 @@ import com.metroair.job_card_management.domain.model.JobCard
 import com.metroair.job_card_management.domain.model.JobStatus
 import java.text.SimpleDateFormat
 import java.util.*
-import kotlin.math.abs
 
 data class TimelineEvent(
     val title: String,
@@ -30,13 +29,6 @@ data class TimelineEvent(
     val color: Color,
     val duration: String? = null,
     val details: String? = null
-)
-
-data class PauseEvent(
-    val timestamp: Long,
-    val reason: String,
-    val duration: Long?,
-    val resumeStatus: String?
 )
 
 @Composable
@@ -78,46 +70,7 @@ fun JobTimelineCard(
                 }
 
                 // Time spent on job
-                if (job.status == JobStatus.BUSY || job.status == JobStatus.PAUSED || job.status == JobStatus.COMPLETED || job.status == JobStatus.CANCELLED) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Divider()
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column {
-                            Text(
-                                text = "Total Time on Job",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = calculateActiveWorkTime(job),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-
-                        if ((job.pausedTime ?: 0) > 0) {
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text(
-                                    text = "Time Paused",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Text(
-                                    text = formatDuration(job.pausedTime ?: 0),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.error
-                                )
-                            }
-                        }
-                    }
-                }
+                Spacer(modifier = Modifier.height(8.dp))
             }
         }
     }
@@ -159,8 +112,8 @@ private fun TimelineItem(
                 Box(
                     modifier = Modifier
                         .width(2.dp)
-                        .height(48.dp)
-                        .padding(vertical = 4.dp)
+                        .height(32.dp)
+                        .padding(vertical = 2.dp)
                 ) {
                     Divider(
                         modifier = Modifier.fillMaxHeight(),
@@ -273,107 +226,7 @@ private fun buildTimelineEvents(job: JobCard): List<TimelineEvent> {
         }.filterNotNull().sortedBy { it.timestamp }
     }
 
-    // Legacy fallback using timestamps/pause history.
-    val events = mutableListOf<TimelineEvent>()
-    val now = System.currentTimeMillis()
-
-    job.acceptedAt?.let { acceptedAt ->
-        events.add(
-            TimelineEvent(
-                title = "Job Accepted",
-                timestamp = acceptedAt,
-                icon = Icons.Default.CheckCircle,
-                color = Color(0xFF4CAF50)
-            )
-        )
-    }
-
-    job.enRouteStartTime?.let { enRouteTime ->
-        val duration = job.startTime?.let { formatDuration(it - enRouteTime) }
-        events.add(
-            TimelineEvent(
-                title = "En Route to Location",
-                timestamp = enRouteTime,
-                icon = Icons.Default.DirectionsCar,
-                color = Color(0xFF9C27B0),
-                duration = duration?.let { "Travel time: $it" }
-            )
-        )
-    }
-
-    job.startTime?.let { startTime ->
-        if (job.status != JobStatus.PENDING) {
-            events.add(
-                TimelineEvent(
-                    title = "Work Started",
-                    timestamp = startTime,
-                    icon = Icons.Default.PlayArrow,
-                    color = Color(0xFF2196F3),
-                    duration = if (job.status == JobStatus.COMPLETED) "Duration: ${calculateActiveWorkTime(job)}" else null
-                )
-            )
-        }
-    }
-
-    val pauseEvents = parsePauseHistory(job.pauseHistory)
-    pauseEvents.forEach { pauseEvent ->
-        events.add(
-            TimelineEvent(
-                title = "Job Paused",
-                timestamp = pauseEvent.timestamp,
-                icon = Icons.Default.Pause,
-                color = Color(0xFFFF9800),
-                details = pauseEvent.reason,
-                duration = pauseEvent.duration?.let { "Paused for: ${formatDuration(it)}" }
-            )
-        )
-
-        pauseEvent.duration?.let { pauseDuration ->
-            if (pauseDuration > 0) {
-                val (title, icon) = when (pauseEvent.resumeStatus) {
-                    "BUSY" -> Pair("Work Resumed", Icons.Default.PlayArrow)
-                    "EN_ROUTE" -> Pair("En Route to Location", Icons.Default.DirectionsCar)
-                    else -> Pair("En Route to Location", Icons.Default.DirectionsCar)
-                }
-
-                events.add(
-                    TimelineEvent(
-                        title = title,
-                        timestamp = pauseEvent.timestamp + pauseDuration,
-                        icon = icon,
-                        color = if (pauseEvent.resumeStatus == "BUSY") Color(0xFF2196F3) else Color(0xFF9C27B0)
-                    )
-                )
-            }
-        }
-    }
-
-    if (job.status == JobStatus.COMPLETED) {
-        job.endTime?.let { endTime ->
-            events.add(
-                TimelineEvent(
-                    title = "Job Completed",
-                    timestamp = endTime,
-                    icon = Icons.Default.CheckCircle,
-                    color = Color(0xFF4CAF50)
-                )
-            )
-        }
-    }
-
-    if (job.status == JobStatus.CANCELLED) {
-        events.add(
-            TimelineEvent(
-                title = "Job Cancelled",
-                timestamp = job.cancelledAt ?: now,
-                icon = Icons.Default.Cancel,
-                color = Color(0xFFF44336),
-                details = job.cancellationReason
-            )
-        )
-    }
-
-    return events.sortedBy { it.timestamp }
+    return emptyList()
 }
 
 private data class StatusHistoryEvent(
@@ -398,47 +251,6 @@ private fun parseStatusHistory(historyJson: String?): List<StatusHistoryEvent> {
     } catch (e: Exception) {
         emptyList()
     }
-}
-
-private fun parsePauseHistory(pauseHistory: String?): List<PauseEvent> {
-    if (pauseHistory == null) return emptyList()
-
-    return try {
-        val jsonArray = org.json.JSONArray(pauseHistory)
-        (0 until jsonArray.length()).map { index ->
-            val pauseEvent = jsonArray.getJSONObject(index)
-            PauseEvent(
-                timestamp = pauseEvent.getLong("timestamp"),
-                reason = pauseEvent.getString("reason"),
-                duration = pauseEvent.optLong("duration", 0L).takeIf { it > 0 },
-                resumeStatus = pauseEvent.optString("resumeStatus", null).takeIf { !it.isNullOrEmpty() }
-            )
-        }
-    } catch (e: Exception) {
-        emptyList()
-    }
-}
-
-private fun extractCancellationReason(technicianNotes: String?): String? {
-    if (technicianNotes == null) return null
-
-    val cancelPattern = """\[CANCELLED: (.+?)\]""".toRegex()
-    return cancelPattern.find(technicianNotes)?.groupValues?.get(1)
-}
-
-private fun calculateActiveWorkTime(job: JobCard): String {
-    val startTime = job.startTime ?: return "0h 0m"
-    val endTime = when {
-        job.status == JobStatus.COMPLETED && job.endTime != null -> job.endTime
-        job.status == JobStatus.CANCELLED && job.cancelledAt != null -> job.cancelledAt
-        else -> System.currentTimeMillis()
-    }
-
-    val totalDuration = endTime - startTime
-    val pausedTime = job.pausedTime ?: 0L
-    val activeDuration = (totalDuration - pausedTime).coerceAtLeast(0L)
-
-    return formatDuration(activeDuration)
 }
 
 private fun formatDuration(durationMs: Long): String {

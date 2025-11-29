@@ -3,7 +3,6 @@ package com.metroair.job_card_management.domain.model
 data class JobCard(
     val id: Int,
     val jobNumber: String,
-    val customerId: Int,
     val customerName: String = "",
     val customerPhone: String = "",
     val customerEmail: String? = null,
@@ -20,14 +19,6 @@ data class JobCard(
     val longitude: Double? = null,
     val estimatedDuration: Int? = null, // minutes
     val travelDistance: Double? = null,
-    val acceptedAt: Long? = null,
-    val enRouteStartTime: Long? = null,
-    val startTime: Long? = null,
-    val endTime: Long? = null,
-    val pausedTime: Long? = null,
-    val pauseHistory: String? = null,
-    val cancelledAt: Long? = null,
-    val cancellationReason: String? = null,
     val statusHistory: String? = null,
     val workPerformed: String? = null,
     val technicianNotes: String? = null,
@@ -36,12 +27,10 @@ data class JobCard(
     val beforePhotos: List<PhotoWithNotes>? = null,
     val afterPhotos: List<PhotoWithNotes>? = null,
     val otherPhotos: List<PhotoWithNotes>? = null,
-    val resourcesUsed: String? = null, // retained for compatibility with UI; normalized usage stored separately
     val requiresFollowUp: Boolean = false,
     val followUpNotes: String? = null,
     val customerRating: Int? = null,
     val customerFeedback: String? = null,
     val isSynced: Boolean = false,
-    val lastSyncedAt: Long? = null,
-    val isMyJob: Boolean = true // single-tech app; keep for compatibility with UI
+    val lastSyncedAt: Long? = null
 )

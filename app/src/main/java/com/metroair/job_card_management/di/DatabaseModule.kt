@@ -5,8 +5,8 @@ import com.metroair.job_card_management.data.local.database.JobCardDatabase
 import com.metroair.job_card_management.data.local.database.dao.AssetDao
 import com.metroair.job_card_management.data.local.database.dao.CurrentTechnicianDao
 import com.metroair.job_card_management.data.local.database.dao.CustomerDao
-import com.metroair.job_card_management.data.local.database.dao.JobCardDao
 import com.metroair.job_card_management.data.local.database.dao.FixedDao
+import com.metroair.job_card_management.data.local.database.dao.JobCardDao
 import com.metroair.job_card_management.data.local.database.dao.JobFixedAssetDao
 import com.metroair.job_card_management.data.local.database.dao.JobInventoryUsageDao
 import com.metroair.job_card_management.data.local.database.dao.JobPurchaseDao

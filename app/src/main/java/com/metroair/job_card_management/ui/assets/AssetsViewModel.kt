@@ -160,22 +160,20 @@ class AssetsViewModel @Inject constructor(
     }
 
     // Fixed Asset operations
-    fun checkoutFixed(
+    suspend fun checkoutFixed(
         fixedId: Int,
         reason: String,
         jobId: Int? = null,
         condition: String = "Good",
         notes: String? = null
-    ) {
-        viewModelScope.launch {
-            fixedRepository.checkoutFixed(
-                fixedId = fixedId,
-                reason = reason,
-                jobId = jobId,
-                condition = condition,
-                notes = notes
-            )
-        }
+    ): Boolean {
+        return fixedRepository.checkoutFixed(
+            fixedId = fixedId,
+            reason = reason,
+            jobId = jobId,
+            condition = condition,
+            notes = notes
+        )
     }
 
     fun returnFixed(
@@ -210,9 +208,9 @@ class AssetsViewModel @Inject constructor(
             .take(limit)
     }
 
-    // Get active checkouts for current technician
+    // Get active checkouts
     val activeCheckouts: StateFlow<List<FixedCheckout>> =
-        fixedRepository.getActiveCheckoutsForCurrentTechnician()
+        fixedRepository.getActiveCheckouts()
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5000),

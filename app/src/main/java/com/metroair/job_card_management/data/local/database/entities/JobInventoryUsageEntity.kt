@@ -1,5 +1,6 @@
 package com.metroair.job_card_management.data.local.database.entities
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -11,28 +12,28 @@ import androidx.room.PrimaryKey
         ForeignKey(
             entity = JobCardEntity::class,
             parentColumns = ["id"],
-            childColumns = ["jobId"],
+            childColumns = ["job_id"],
             onDelete = ForeignKey.CASCADE
         ),
         ForeignKey(
             entity = AssetEntity::class,
             parentColumns = ["id"],
-            childColumns = ["inventoryId"],
+            childColumns = ["inventory_id"],
             onDelete = ForeignKey.CASCADE
         )
     ],
     indices = [
-        Index("jobId"),
-        Index("inventoryId")
+        Index("job_id"),
+        Index("inventory_id")
     ]
 )
 data class JobInventoryUsageEntity(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
-    val jobId: Int,
-    val inventoryId: Int,
-    val itemCode: String,
-    val itemName: String,
+    @ColumnInfo(name = "job_id") val jobId: Int,
+    @ColumnInfo(name = "inventory_id") val inventoryId: Int,
+    @ColumnInfo(name = "item_code") val itemCode: String,
+    @ColumnInfo(name = "item_name") val itemName: String,
     val quantity: Double,
-    val unitOfMeasure: String,
-    val recordedAt: Long = System.currentTimeMillis()
+    @ColumnInfo(name = "unit_of_measure") val unitOfMeasure: String,
+    @ColumnInfo(name = "recorded_at") val recordedAt: Long = System.currentTimeMillis()
 )

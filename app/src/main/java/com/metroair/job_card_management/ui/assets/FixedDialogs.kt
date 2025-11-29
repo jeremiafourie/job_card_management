@@ -22,6 +22,7 @@ import java.util.*
 @Composable
 fun FixedCheckoutDialog(
     fixed: Fixed,
+    isLoading: Boolean = false,
     onDismiss: () -> Unit,
     onConfirm: (reason: String, jobId: Int?, condition: String, notes: String?) -> Unit
 ) {
@@ -154,15 +155,24 @@ fun FixedCheckoutDialog(
                         notes.ifEmpty { null }
                     )
                 },
-                enabled = reason.isNotBlank()
+                enabled = reason.isNotBlank() && !isLoading
             ) {
-                Icon(Icons.Default.Output, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Checkout")
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Checking out...")
+                } else {
+                    Icon(Icons.Default.Output, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Checkout")
+                }
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(onClick = onDismiss, enabled = !isLoading) {
                 Text("Cancel")
             }
         }

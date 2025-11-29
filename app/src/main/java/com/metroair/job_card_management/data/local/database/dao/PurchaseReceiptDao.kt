@@ -15,12 +15,15 @@ interface PurchaseReceiptDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertReceipts(receipts: List<PurchaseReceiptEntity>)
 
-    @Query("SELECT * FROM purchase_receipts WHERE purchaseId = :purchaseId ORDER BY capturedAt DESC")
+    @Query("SELECT * FROM purchase_receipts WHERE purchase_id = :purchaseId ORDER BY captured_at DESC")
     fun getReceiptsForPurchase(purchaseId: Int): Flow<List<PurchaseReceiptEntity>>
 
-    @Query("SELECT * FROM purchase_receipts WHERE purchaseId = :purchaseId ORDER BY capturedAt DESC")
+    @Query("SELECT * FROM purchase_receipts WHERE purchase_id = :purchaseId ORDER BY captured_at DESC")
     suspend fun getReceiptsForPurchaseSync(purchaseId: Int): List<PurchaseReceiptEntity>
 
-    @Query("UPDATE purchase_receipts SET uri = COALESCE(:uri, uri), mimeType = COALESCE(:mimeType, mimeType), notes = :notes WHERE id = :receiptId")
-    suspend fun updateReceipt(receiptId: Int, uri: String?, mimeType: String?, notes: String?)
+    @Query("DELETE FROM purchase_receipts WHERE purchase_id = :purchaseId")
+    suspend fun clearForPurchase(purchaseId: Int)
+
+    @Query("UPDATE purchase_receipts SET uri = COALESCE(:uri, uri), mime_type = COALESCE(:mimeType, mime_type) WHERE id = :receiptId")
+    suspend fun updateReceipt(receiptId: Int, uri: String?, mimeType: String?)
 }

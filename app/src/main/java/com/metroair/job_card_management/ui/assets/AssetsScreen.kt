@@ -19,6 +19,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.metroair.job_card_management.domain.model.Asset
 import com.metroair.job_card_management.domain.model.Fixed
 import com.metroair.job_card_management.domain.model.FixedType
+import kotlinx.coroutines.launch
 
 enum class AssetViewType {
     ALL, CURRENT, FIXED
@@ -37,90 +38,96 @@ fun AssetsScreen(
     val viewType by viewModel.viewType.collectAsStateWithLifecycle()
     val selectedFixedType by viewModel.selectedFixedType.collectAsStateWithLifecycle()
     val lowStockAssets = currentAssets.filter { it.isLowStock }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
 
     var selectedFixed by remember { mutableStateOf<Fixed?>(null) }
     var showCheckoutDialog by remember { mutableStateOf(false) }
     var showFixedDetailsDialog by remember { mutableStateOf(false) }
+    var isCheckoutLoading by remember { mutableStateOf(false) }
 
-    Column(
-        modifier = Modifier.fillMaxSize()
-    ) {
-        // Search Bar
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = viewModel::updateSearchQuery,
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { padding ->
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            placeholder = {
-                Text(
-                    when (viewType) {
-                        AssetViewType.FIXED -> "Search fixed assets..."
-                        AssetViewType.CURRENT -> "Search current items..."
-                        else -> "Search all..."
-                    }
-                )
-            },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-            trailingIcon = {
-                if (searchQuery.isNotEmpty()) {
-                    IconButton(onClick = { viewModel.updateSearchQuery("") }) {
-                        Icon(Icons.Default.Clear, contentDescription = "Clear search")
-                    }
-                }
-            },
-            singleLine = true,
-            shape = MaterialTheme.shapes.large
-        )
-
-        // View Type Filters (Current, Fixed, All)
-        LazyRow(
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                .fillMaxSize()
+                .padding(padding)
         ) {
-            item {
-                FilterChip(
-                    selected = viewType == AssetViewType.ALL,
-                    onClick = { viewModel.setViewType(AssetViewType.ALL) },
-                    label = { Text("All") },
-                    leadingIcon = if (viewType == AssetViewType.ALL) {
-                        { Icon(Icons.Default.Check, contentDescription = null, Modifier.size(18.dp)) }
-                    } else null
-                )
-            }
-            item {
-                FilterChip(
-                    selected = viewType == AssetViewType.CURRENT,
-                    onClick = { viewModel.setViewType(AssetViewType.CURRENT) },
-                    label = { Text("Current") },
-                    leadingIcon = if (viewType == AssetViewType.CURRENT) {
-                        { Icon(Icons.Default.Inventory2, contentDescription = null, Modifier.size(18.dp)) }
-                    } else null,
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer
+            // Search Bar
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = viewModel::updateSearchQuery,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                placeholder = {
+                    Text(
+                        when (viewType) {
+                            AssetViewType.FIXED -> "Search fixed assets..."
+                            AssetViewType.CURRENT -> "Search current items..."
+                            else -> "Search all..."
+                        }
                     )
-                )
-            }
-            item {
-                FilterChip(
-                    selected = viewType == AssetViewType.FIXED,
-                    onClick = { viewModel.setViewType(AssetViewType.FIXED) },
-                    label = { Text("Fixed") },
-                    leadingIcon = if (viewType == AssetViewType.FIXED) {
-                        { Icon(Icons.Default.Build, contentDescription = null, Modifier.size(18.dp)) }
-                    } else null,
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer
-                    )
-                )
-            }
-        }
+                },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { viewModel.updateSearchQuery("") }) {
+                            Icon(Icons.Default.Clear, contentDescription = "Clear search")
+                        }
+                    }
+                },
+                singleLine = true,
+                shape = MaterialTheme.shapes.large
+            )
 
-        // Category/Type Filter Chips
-        when (viewType) {
-            AssetViewType.FIXED -> {
-                // Fixed Type Filter
+            // View Type Filters (Current, Fixed, All)
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                item {
+                    FilterChip(
+                        selected = viewType == AssetViewType.ALL,
+                        onClick = { viewModel.setViewType(AssetViewType.ALL) },
+                        label = { Text("All") },
+                        leadingIcon = if (viewType == AssetViewType.ALL) {
+                            { Icon(Icons.Default.Check, contentDescription = null, Modifier.size(18.dp)) }
+                        } else null
+                    )
+                }
+                item {
+                    FilterChip(
+                        selected = viewType == AssetViewType.CURRENT,
+                        onClick = { viewModel.setViewType(AssetViewType.CURRENT) },
+                        label = { Text("Current") },
+                        leadingIcon = if (viewType == AssetViewType.CURRENT) {
+                            { Icon(Icons.Default.Inventory2, contentDescription = null, Modifier.size(18.dp)) }
+                        } else null,
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer
+                        )
+                    )
+                }
+                item {
+                    FilterChip(
+                        selected = viewType == AssetViewType.FIXED,
+                        onClick = { viewModel.setViewType(AssetViewType.FIXED) },
+                        label = { Text("Fixed") },
+                        leadingIcon = if (viewType == AssetViewType.FIXED) {
+                            { Icon(Icons.Default.Build, contentDescription = null, Modifier.size(18.dp)) }
+                        } else null,
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer
+                        )
+                    )
+                }
+            }
+
+            // Category Filter (only for current inventory)
+            if (viewType != AssetViewType.FIXED) {
                 LazyRow(
                     modifier = Modifier.fillMaxWidth(),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
@@ -128,149 +135,160 @@ fun AssetsScreen(
                 ) {
                     item {
                         FilterChip(
-                            selected = selectedFixedType == null,
-                            onClick = { viewModel.selectFixedType(null) },
-                            label = { Text("All Types") },
-                            leadingIcon = if (selectedFixedType == null) {
-                                { Icon(Icons.Default.Check, contentDescription = null, Modifier.size(18.dp)) }
-                            } else null
+                            selected = selectedCategory == null,
+                            onClick = { viewModel.selectCategory(null) },
+                            label = { Text("All Categories") }
                         )
                     }
-                    item {
+                    items(categories) { category ->
                         FilterChip(
-                            selected = selectedFixedType == FixedType.TOOL,
-                            onClick = { viewModel.selectFixedType(FixedType.TOOL) },
-                            label = { Text("Tools") }
-                        )
-                    }
-                    item {
-                        FilterChip(
-                            selected = selectedFixedType == FixedType.AIR_CONDITIONER,
-                            onClick = { viewModel.selectFixedType(FixedType.AIR_CONDITIONER) },
-                            label = { Text("Air Conditioners") }
-                        )
-                    }
-                    item {
-                        FilterChip(
-                            selected = selectedFixedType == FixedType.LADDER,
-                            onClick = { viewModel.selectFixedType(FixedType.LADDER) },
-                            label = { Text("Ladders") }
-                        )
-                    }
-                    item {
-                        FilterChip(
-                            selected = selectedFixedType == FixedType.EQUIPMENT,
-                            onClick = { viewModel.selectFixedType(FixedType.EQUIPMENT) },
-                            label = { Text("Equipment") }
+                            selected = selectedCategory == category,
+                            onClick = { viewModel.selectCategory(category) },
+                            label = { Text(category) }
                         )
                     }
                 }
             }
-            AssetViewType.CURRENT -> {
-                // Category Filter for Current Inventory
-                if (categories.isNotEmpty()) {
-                    LazyRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
+
+            // Fixed Type Filter (only for fixed view)
+            if (viewType == AssetViewType.FIXED) {
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FixedType.values().forEach { type ->
                         item {
                             FilterChip(
-                                selected = selectedCategory == null,
-                                onClick = { viewModel.selectCategory(null) },
-                                label = { Text("All Categories") },
-                                leadingIcon = if (selectedCategory == null) {
-                                    { Icon(Icons.Default.Check, contentDescription = null, Modifier.size(18.dp)) }
-                                } else null
-                            )
-                        }
-                        items(categories) { category ->
-                            FilterChip(
-                                selected = selectedCategory == category,
-                                onClick = { viewModel.selectCategory(category) },
-                                label = { Text(category) },
-                                leadingIcon = if (selectedCategory == category) {
-                                    { Icon(Icons.Default.Check, contentDescription = null, Modifier.size(18.dp)) }
-                                } else null
+                                selected = selectedFixedType == type,
+                                onClick = { viewModel.selectFixedType(type) },
+                                label = { Text(type.name.replace('_', ' ')) }
                             )
                         }
                     }
                 }
             }
-            else -> {
-                // Show both filters for ALL view
-            }
-        }
 
-        // Low Stock Warning (only for current inventory)
-        if (viewType != AssetViewType.FIXED && lowStockAssets.isNotEmpty()) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer
-                )
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        Icons.Default.Warning,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onErrorContainer
+            // Low Stock Warning (only for current inventory)
+            if (viewType != AssetViewType.FIXED && lowStockAssets.isNotEmpty()) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Column {
-                        Text(
-                            text = "Low Stock Alert",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onErrorContainer
-                        )
-                        Text(
-                            text = "${lowStockAssets.size} items below minimum stock",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onErrorContainer
-                        )
-                    }
-                }
-            }
-        }
-
-        // Main Content
-        when (viewType) {
-            AssetViewType.FIXED -> {
-                // Fixed Assets List
-                if (fixedAssets.isEmpty()) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Icon(
-                                Icons.Default.Build,
-                                contentDescription = null,
-                                modifier = Modifier.size(64.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
+                        Icon(
+                            Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
                             Text(
-                                text = "No fixed assets found",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                text = "Low Stock Alert",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                            Text(
+                                text = "${lowStockAssets.size} items below minimum stock",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer
                             )
                         }
                     }
-                } else {
+                }
+            }
+
+            // Main Content
+            when (viewType) {
+                AssetViewType.FIXED -> {
+                    if (fixedAssets.isEmpty()) {
+                        EmptyState(
+                            icon = Icons.Default.Build,
+                            title = "No fixed assets found"
+                        )
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(fixedAssets) { fixed ->
+                                FixedCard(
+                                    fixed = fixed,
+                                    onCheckout = {
+                                        selectedFixed = fixed
+                                        showCheckoutDialog = true
+                                    },
+                                    onViewDetails = {
+                                        selectedFixed = fixed
+                                        showFixedDetailsDialog = true
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+                AssetViewType.CURRENT -> {
+                    if (currentAssets.isEmpty()) {
+                        EmptyState(
+                            icon = Icons.Default.Inventory,
+                            title = "No current items found"
+                        )
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            if (selectedCategory != null || searchQuery.isNotEmpty()) {
+                                items(currentAssets) { asset ->
+                                    AssetCard(
+                                        asset = asset,
+                                        onUseAsset = { quantity -> viewModel.useAsset(asset.id, quantity) }
+                                    )
+                                }
+                            } else {
+                                val groupedAssets = currentAssets.groupBy { it.category }
+                                groupedAssets.forEach { (category, categoryAssets) ->
+                                    item {
+                                        Text(
+                                            text = category,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(vertical = 8.dp)
+                                        )
+                                    }
+                                    items(categoryAssets) { asset ->
+                                        AssetCard(
+                                            asset = asset,
+                                            onUseAsset = { quantity -> viewModel.useAsset(asset.id, quantity) }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                else -> {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        items(currentAssets) { asset ->
+                            AssetCard(
+                                asset = asset,
+                                onUseAsset = { quantity -> viewModel.useAsset(asset.id, quantity) }
+                            )
+                        }
                         items(fixedAssets) { fixed ->
                             FixedCard(
                                 fixed = fixed,
@@ -287,114 +305,6 @@ fun AssetsScreen(
                     }
                 }
             }
-            AssetViewType.CURRENT -> {
-                // Current Inventory List
-                if (currentAssets.isEmpty()) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Icon(
-                                Icons.Default.Inventory,
-                                contentDescription = null,
-                                modifier = Modifier.size(64.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = "No current items found",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        if (selectedCategory != null || searchQuery.isNotEmpty()) {
-                            items(currentAssets) { asset ->
-                                AssetCard(
-                                    asset = asset,
-                                    onUseAsset = { quantity -> viewModel.useAsset(asset.id, quantity) }
-                                )
-                            }
-                        } else {
-                            val groupedAssets = currentAssets.groupBy { it.category }
-                            groupedAssets.forEach { (category, categoryAssets) ->
-                                item {
-                                    Text(
-                                        text = category,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(vertical = 8.dp)
-                                    )
-                                }
-                                items(categoryAssets) { asset ->
-                                    AssetCard(
-                                        asset = asset,
-                                        onUseAsset = { quantity -> viewModel.useAsset(asset.id, quantity) }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            AssetViewType.ALL -> {
-                // Combined view - show both fixed assets and current inventory
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    if (fixedAssets.isNotEmpty()) {
-                        item {
-                            Text(
-                                text = "Fixed",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(vertical = 8.dp)
-                            )
-                        }
-                        items(fixedAssets.take(5)) { fixed ->
-                            FixedCard(
-                                fixed = fixed,
-                                onCheckout = {
-                                    selectedFixed = fixed
-                                    showCheckoutDialog = true
-                                },
-                                onViewDetails = {
-                                    selectedFixed = fixed
-                                    showFixedDetailsDialog = true
-                                }
-                            )
-                        }
-                    }
-
-                    if (currentAssets.isNotEmpty()) {
-                        item {
-                            Text(
-                                text = "Current",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(vertical = 8.dp)
-                            )
-                        }
-                        items(currentAssets.take(10)) { asset ->
-                            AssetCard(
-                                asset = asset,
-                                onUseAsset = { quantity -> viewModel.useAsset(asset.id, quantity) }
-                            )
-                        }
-                    }
-                }
-            }
         }
     }
 
@@ -402,14 +312,23 @@ fun AssetsScreen(
     if (showCheckoutDialog && selectedFixed != null) {
         FixedCheckoutDialog(
             fixed = selectedFixed!!,
+            isLoading = isCheckoutLoading,
             onDismiss = {
                 showCheckoutDialog = false
                 selectedFixed = null
+                isCheckoutLoading = false
             },
             onConfirm = { reason, jobId, condition, notes ->
-                viewModel.checkoutFixed(selectedFixed!!.id, reason, jobId, condition, notes)
-                showCheckoutDialog = false
-                selectedFixed = null
+                coroutineScope.launch {
+                    isCheckoutLoading = true
+                    val success = viewModel.checkoutFixed(selectedFixed!!.id, reason, jobId, condition, notes)
+                    snackbarHostState.showSnackbar(
+                        if (success) "Checked out ${selectedFixed!!.fixedName}" else "Checkout failed. Asset may already be in use."
+                    )
+                    showCheckoutDialog = false
+                    selectedFixed = null
+                    isCheckoutLoading = false
+                }
             }
         )
     }
@@ -424,6 +343,20 @@ fun AssetsScreen(
                 selectedFixed = null
             }
         )
+    }
+}
+
+@Composable
+private fun EmptyState(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 
@@ -464,91 +397,47 @@ fun AssetCard(
                         )
                     },
                     modifier = Modifier.height(24.dp),
-                    colors = AssistChipDefaults.assistChipColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
+                    leadingIcon = {
+                        Icon(
+                            Icons.Default.Category,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
                 )
             }
 
-            // Item code
+            // Stock and minimum
             Text(
-                text = "Code: ${asset.itemCode}",
+                text = "Stock: ${asset.currentStock} ${asset.unitOfMeasure}",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Text(
+                text = "Minimum: ${asset.minimumStock} ${asset.unitOfMeasure}",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = if (asset.isLowStock) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Stock information and action
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    AssistChip(
-                        onClick = { },
-                        label = {
-                            Text("${asset.currentStock} ${asset.unitOfMeasure}")
-                        },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Default.Inventory2,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        },
-                        colors = if (asset.isLowStock) {
-                            AssistChipDefaults.assistChipColors(
-                                containerColor = MaterialTheme.colorScheme.errorContainer
-                            )
-                        } else {
-                            AssistChipDefaults.assistChipColors()
-                        }
-                    )
-
-                    if (asset.isLowStock) {
-                        AssistChip(
-                            onClick = { },
-                            label = { Text("Low Stock") },
-                            leadingIcon = {
-                                Icon(
-                                    Icons.Default.Warning,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                    tint = MaterialTheme.colorScheme.error
-                                )
-                            },
-                            colors = AssistChipDefaults.assistChipColors(
-                                containerColor = MaterialTheme.colorScheme.errorContainer
-                            )
-                        )
-                    }
-                }
-
-                IconButton(
-                    onClick = { showUseDialog = true }
-                ) {
-                    Icon(
-                        Icons.Default.RemoveCircle,
-                        contentDescription = "Use Asset",
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
+            // Low stock badge
+            if (asset.isLowStock) {
+                AssistChip(
+                    onClick = { },
+                    label = { Text("Low Stock") },
+                    colors = AssistChipDefaults.assistChipColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    ),
+                    modifier = Modifier.padding(top = 4.dp)
+                )
             }
         }
     }
 
-    // Use Asset Dialog
     if (showUseDialog) {
-        UseAssetDialog(
+        AssetUseDialog(
             asset = asset,
             onDismiss = { showUseDialog = false },
-            onConfirm = { quantity ->
-                onUseAsset(quantity)
+            onConfirm = {
+                onUseAsset(it)
                 showUseDialog = false
             }
         )
@@ -557,31 +446,27 @@ fun AssetCard(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun UseAssetDialog(
+fun AssetUseDialog(
     asset: Asset,
     onDismiss: () -> Unit,
     onConfirm: (Double) -> Unit
 ) {
-    var quantity by remember { mutableStateOf("1") }
+    var quantity by remember { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Use ${asset.itemName}") },
+        title = { Text("Use Asset") },
         text = {
             Column {
-                Text("Current Stock: ${asset.currentStock} ${asset.unitOfMeasure}")
-                Spacer(modifier = Modifier.height(16.dp))
                 OutlinedTextField(
                     value = quantity,
-                    onValueChange = {
-                        if (it.isEmpty() || it.matches(Regex("^\\d*\\.?\\d*$"))) {
-                            quantity = it
-                        }
-                    },
-                    label = { Text("Quantity to Use") },
-                    suffix = { Text(asset.unitOfMeasure) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                    onValueChange = { quantity = it },
+                    label = { Text("Quantity to use") },
+                    placeholder = { Text("Available: ${asset.currentStock}") },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number
+                    ),
+                    singleLine = true
                 )
             }
         },
@@ -620,11 +505,9 @@ fun FixedCard(
         onClick = onViewDetails
     ) {
         Column {
-            // Main content with padding
             Column(
                 modifier = Modifier.padding(16.dp)
             ) {
-                // Top row with name and category
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -635,13 +518,11 @@ fun FixedCard(
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.weight(1f)
                     )
-
-                    // Category label in top right
                     AssistChip(
                         onClick = { },
                         label = {
                             Text(
-                                when(fixed.fixedType) {
+                                when (fixed.fixedType) {
                                     FixedType.AIR_CONDITIONER -> "Air Conditioner"
                                     FixedType.TOOL -> "Tool"
                                     FixedType.LADDER -> "Ladder"
@@ -656,7 +537,7 @@ fun FixedCard(
                         modifier = Modifier.height(24.dp),
                         leadingIcon = {
                             Icon(
-                                when(fixed.fixedType) {
+                                when (fixed.fixedType) {
                                     FixedType.AIR_CONDITIONER -> Icons.Default.AcUnit
                                     FixedType.TOOL -> Icons.Default.Build
                                     FixedType.LADDER -> Icons.Default.Stairs
@@ -669,25 +550,21 @@ fun FixedCard(
                     )
                 }
 
-                // Codes and serial number
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
                         text = "Code: ${fixed.fixedCode}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    if (fixed.serialNumber != null) {
+                    fixed.serialNumber?.let {
                         Text(
-                            text = "• SN: ${fixed.serialNumber}",
+                            text = "• SN: $it",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
 
-                // Show checked out info if not available
                 if (!fixed.isAvailable && fixed.currentHolder != null) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Row(
@@ -713,7 +590,6 @@ fun FixedCard(
                 }
             }
 
-            // Full width checkout button at the bottom (only if available)
             if (fixed.isAvailable) {
                 FilledTonalButton(
                     onClick = onCheckout,
@@ -722,11 +598,7 @@ fun FixedCard(
                         .padding(horizontal = 16.dp)
                         .padding(bottom = 12.dp)
                 ) {
-                    Icon(
-                        Icons.Default.Output,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
+                    Icon(Icons.Default.Output, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Checkout")
                 }

@@ -23,12 +23,12 @@ interface CurrentTechnicianDao {
     @Update
     suspend fun updateCurrentTechnician(technician: TechnicianEntity)
 
-    @Query("UPDATE technician SET lastSyncTime = :timestamp WHERE id = 1")
+    @Query("UPDATE technician SET last_sync_time = :timestamp WHERE id = 1")
     suspend fun updateLastSyncTime(timestamp: Long)
 
     @Query("DELETE FROM technician")
     suspend fun logout()
 
-    @Query("SELECT authToken FROM technician WHERE id = 1")
+    @Query("SELECT auth_token FROM technician WHERE id = 1")
     suspend fun getAuthToken(): String?
 }

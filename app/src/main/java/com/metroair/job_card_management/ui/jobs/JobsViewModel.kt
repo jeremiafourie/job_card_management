@@ -6,7 +6,15 @@ import com.metroair.job_card_management.data.repository.JobCardRepository
 import com.metroair.job_card_management.domain.model.JobCard
 import com.metroair.job_card_management.domain.model.JobStatus
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -22,48 +30,22 @@ class JobsViewModel @Inject constructor(
     private val _isActiveFilter = MutableStateFlow(false)
     val isActiveFilter: StateFlow<Boolean> = _isActiveFilter.asStateFlow()
 
-    init {
-        // Read status filter from navigation arguments
-        val statusParam = savedStateHandle.get<String>("status")
-        if (statusParam != null && statusParam != "null") {
-            when (statusParam) {
-                "ACTIVE" -> _isActiveFilter.value = true
-                else -> {
-                    try {
-                        _selectedStatus.value = JobStatus.valueOf(statusParam)
-                    } catch (e: IllegalArgumentException) {
-                        // Invalid status, keep as null
-                    }
-                }
-            }
-        }
-    }
-
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
     private val _uiMessage = MutableStateFlow<String?>(null)
     val uiMessage: StateFlow<String?> = _uiMessage.asStateFlow()
 
-    // My jobs (assigned to current technician)
-    val myJobs: StateFlow<List<JobCard>> = jobCardRepository.getMyJobs()
+    // All jobs (single-tech app)
+    val jobs: StateFlow<List<JobCard>> = jobCardRepository.getJobs()
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
+            started = kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
 
-    // Available jobs (unassigned)
-    val availableJobs: StateFlow<List<JobCard>> = jobCardRepository.getAvailableJobs()
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
-
-    // Search results
-    private val searchResults: Flow<List<JobCard>> = _searchQuery
-        .debounce(300) // Wait 300ms after user stops typing
+    private val searchResults = _searchQuery
+        .debounce(300)
         .flatMapLatest { query ->
             if (query.isBlank()) {
                 flowOf(emptyList())
@@ -72,45 +54,26 @@ class JobsViewModel @Inject constructor(
             }
         }
 
-    // Filtered jobs based on selection
     val filteredJobs: StateFlow<List<JobCard>> =
         combine(
-            myJobs,
-            availableJobs,
+            jobs,
+            searchResults,
             _selectedStatus,
-            _searchQuery
-        ) { myJobsList, availableJobsList, statusFilter, query ->
-            // Combine all jobs
-            val allJobs = myJobsList + availableJobsList
+            _isActiveFilter
+        ) { allJobs, search, statusFilter, activeFilter ->
+            var base = if (_searchQuery.value.isNotBlank()) search else allJobs
 
-            // Apply filters
-            var baseList = if (query.isNotBlank()) {
-                // Search filter
-                allJobs.filter { job ->
-                    job.customerName.contains(query, ignoreCase = true) ||
-                    job.title.contains(query, ignoreCase = true) ||
-                    job.jobNumber.contains(query, ignoreCase = true) ||
-                    (job.serviceAddress?.contains(query, ignoreCase = true) == true)
-                }
-            } else {
-                allJobs
+            statusFilter?.let { status ->
+                base = base.filter { it.status == status }
             }
 
-            // Apply status filter
-            if (statusFilter != null) {
-                baseList = baseList.filter { it.status == statusFilter }
-            }
-
-            baseList
-        }.combine(_isActiveFilter) { jobs, activeFilter ->
             if (activeFilter) {
-                jobs.filter { it.status == JobStatus.BUSY || it.status == JobStatus.EN_ROUTE || it.status == JobStatus.PAUSED }
-            } else {
-                jobs
+                base = base.filter { it.status == JobStatus.BUSY || it.status == JobStatus.EN_ROUTE || it.status == JobStatus.PAUSED }
             }
+            base
         }.stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
+            started = kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
 
@@ -141,7 +104,7 @@ class JobsViewModel @Inject constructor(
         viewModelScope.launch {
             val success = jobCardRepository.startJob(jobId)
             if (!success) {
-                _uiMessage.value = "Cannot start this job. You must first pause or complete your current busy job."
+                _uiMessage.value = "Cannot start this job. You must first pause or complete your current active job."
             }
         }
     }
@@ -159,7 +122,7 @@ class JobsViewModel @Inject constructor(
         viewModelScope.launch {
             val success = jobCardRepository.resumeJob(jobId)
             if (!success) {
-                _uiMessage.value = "Cannot resume this job. You must first pause or complete your current busy job."
+                _uiMessage.value = "Cannot resume this job. You must first pause or complete your current active job."
             }
         }
     }
@@ -168,29 +131,7 @@ class JobsViewModel @Inject constructor(
         viewModelScope.launch {
             val success = jobCardRepository.enRouteJob(jobId)
             if (!success) {
-                _uiMessage.value = "Cannot set job to en route. You must first pause or complete your current busy job."
-            }
-        }
-    }
-
-    fun claimJob(jobId: Int) {
-        viewModelScope.launch {
-            val success = jobCardRepository.claimJob(jobId)
-            if (success) {
-                _uiMessage.value = "Job claimed successfully"
-            } else {
-                _uiMessage.value = "Failed to claim job"
-            }
-        }
-    }
-
-    fun acceptJob(jobId: Int) {
-        viewModelScope.launch {
-            val success = jobCardRepository.acceptJob(jobId)
-            if (success) {
-                _uiMessage.value = "Job accepted successfully"
-            } else {
-                _uiMessage.value = "Failed to accept job"
+                _uiMessage.value = "Cannot set job to en route. You must first pause or complete your current active job."
             }
         }
     }
@@ -198,15 +139,7 @@ class JobsViewModel @Inject constructor(
     fun cancelJob(jobId: Int, reason: String) {
         viewModelScope.launch {
             val success = jobCardRepository.cancelJob(jobId, reason)
-            if (success) {
-                _uiMessage.value = "Job cancelled"
-            } else {
-                _uiMessage.value = "Failed to cancel job"
-            }
+            _uiMessage.value = if (success) "Job cancelled" else "Failed to cancel job"
         }
-    }
-
-    fun clearMessage() {
-        _uiMessage.value = null
     }
 }

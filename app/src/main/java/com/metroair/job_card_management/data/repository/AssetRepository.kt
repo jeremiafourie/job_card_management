@@ -15,13 +15,23 @@ interface AssetRepository {
     fun getAllAssets(): Flow<List<Asset>>
     fun getAssetsByCategory(category: String): Flow<List<Asset>>
     fun getLowStock(): Flow<List<Asset>>
+    fun getUsageForJob(jobId: Int): Flow<List<com.metroair.job_card_management.domain.model.InventoryUsage>>
     suspend fun useAsset(assetId: Int, quantity: Double)
     suspend fun restoreAsset(assetId: Int, quantity: Double)
+    suspend fun recordUsage(
+        jobId: Int,
+        assetId: Int,
+        itemCode: String,
+        itemName: String,
+        quantity: Double,
+        unit: String
+    )
 }
 
 @Singleton
 class AssetRepositoryImpl @Inject constructor(
     private val assetDao: AssetDao,
+    private val jobInventoryUsageDao: com.metroair.job_card_management.data.local.database.dao.JobInventoryUsageDao,
     @IoDispatcher private val ioDispatcher: CoroutineDispatcher
 ) : AssetRepository {
 
@@ -76,15 +86,52 @@ class AssetRepositoryImpl @Inject constructor(
             }
             .flowOn(ioDispatcher)
 
+    override fun getUsageForJob(jobId: Int): Flow<List<com.metroair.job_card_management.domain.model.InventoryUsage>> =
+        jobInventoryUsageDao.getUsageForJob(jobId)
+            .map { list ->
+                list.map { usage ->
+                    com.metroair.job_card_management.domain.model.InventoryUsage(
+                        id = usage.id,
+                        jobId = usage.jobId,
+                        inventoryId = usage.inventoryId,
+                        itemCode = usage.itemCode,
+                        itemName = usage.itemName,
+                        quantity = usage.quantity,
+                        unitOfMeasure = usage.unitOfMeasure,
+                        recordedAt = usage.recordedAt
+                    )
+                }
+            }
+            .flowOn(ioDispatcher)
+
     override suspend fun useAsset(assetId: Int, quantity: Double) {
-        withContext(ioDispatcher) {
-            assetDao.useAsset(assetId, quantity, System.currentTimeMillis())
-        }
+        withContext(ioDispatcher) { assetDao.useAsset(assetId, quantity, System.currentTimeMillis()) }
     }
 
     override suspend fun restoreAsset(assetId: Int, quantity: Double) {
+        withContext(ioDispatcher) { assetDao.restoreAsset(assetId, quantity, System.currentTimeMillis()) }
+    }
+
+    override suspend fun recordUsage(
+        jobId: Int,
+        assetId: Int,
+        itemCode: String,
+        itemName: String,
+        quantity: Double,
+        unit: String
+    ) {
         withContext(ioDispatcher) {
-            assetDao.restoreAsset(assetId, quantity, System.currentTimeMillis())
+            jobInventoryUsageDao.insertUsage(
+                com.metroair.job_card_management.data.local.database.entities.JobInventoryUsageEntity(
+                    jobId = jobId,
+                    inventoryId = assetId,
+                    itemCode = itemCode,
+                    itemName = itemName,
+                    quantity = quantity,
+                    unitOfMeasure = unit
+                )
+            )
+            assetDao.useAsset(assetId, quantity, System.currentTimeMillis())
         }
     }
 }
