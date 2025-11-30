@@ -190,7 +190,6 @@ fun JobDetailScreen(
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(desc, style = MaterialTheme.typography.bodyMedium)
                             }
-                            Spacer(modifier = Modifier.height(8.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.Schedule, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text("${job.scheduledDate} ${job.scheduledTime ?: ""}".trim(), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -202,11 +201,11 @@ fun JobDetailScreen(
                                     Text("Est. $est minutes", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable(enabled = job.latitude != null && job.longitude != null) {
-                                        val uri = android.net.Uri.parse("geo:${job.latitude},${job.longitude}?q=${job.latitude},${job.longitude}(${job.serviceAddress})")
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable(enabled = job.latitude != null && job.longitude != null) {
+                                            val uri = android.net.Uri.parse("geo:${job.latitude},${job.longitude}?q=${job.latitude},${job.longitude}(${job.serviceAddress})")
                                         val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
                                         intent.setPackage("com.google.android.apps.maps")
                                         try { context.startActivity(intent) } catch (e: android.content.ActivityNotFoundException) {
@@ -215,24 +214,16 @@ fun JobDetailScreen(
                                     },
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text("Service Location", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text(job.serviceAddress ?: "", style = MaterialTheme.typography.bodyMedium)
-                                    job.customerAddress?.let { addr ->
-                                        Text(addr, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                ) {
+                                    Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(job.serviceAddress ?: "", style = MaterialTheme.typography.bodyMedium)
+                                        job.customerAddress?.let { addr ->
+                                            Text(addr, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
                                     }
-                                }
                                 if (job.latitude != null && job.longitude != null) {
                                     Icon(Icons.Default.Navigation, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
-                                }
-                            }
-                            job.travelDistance?.let { dist ->
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.DirectionsCar, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text("Travel: ${"%.1f".format(dist)} km", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                         }
