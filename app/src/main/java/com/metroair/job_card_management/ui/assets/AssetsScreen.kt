@@ -21,23 +21,21 @@ import com.metroair.job_card_management.domain.model.Fixed
 import com.metroair.job_card_management.domain.model.FixedType
 import kotlinx.coroutines.launch
 
-enum class AssetViewType {
-    ALL, CURRENT, FIXED
-}
+enum class AssetViewType { INVENTORY, FIXED }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AssetsScreen(
     viewModel: AssetsViewModel = hiltViewModel()
 ) {
-    val currentAssets by viewModel.filteredAssets.collectAsStateWithLifecycle()
+    val inventoryAssets by viewModel.filteredAssets.collectAsStateWithLifecycle()
     val fixedAssets by viewModel.filteredFixed.collectAsStateWithLifecycle()
     val categories by viewModel.categories.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val selectedCategory by viewModel.selectedCategory.collectAsStateWithLifecycle()
     val viewType by viewModel.viewType.collectAsStateWithLifecycle()
     val selectedFixedType by viewModel.selectedFixedType.collectAsStateWithLifecycle()
-    val lowStockAssets = currentAssets.filter { it.isLowStock }
+    val lowStockAssets = inventoryAssets.filter { it.isLowStock }
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
 
@@ -54,6 +52,22 @@ fun AssetsScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
+            // Tabs for asset type
+            TabRow(
+                selectedTabIndex = if (viewType == AssetViewType.INVENTORY) 0 else 1
+            ) {
+                Tab(
+                    selected = viewType == AssetViewType.INVENTORY,
+                    onClick = { viewModel.setViewType(AssetViewType.INVENTORY) },
+                    text = { Text("Inventory") }
+                )
+                Tab(
+                    selected = viewType == AssetViewType.FIXED,
+                    onClick = { viewModel.setViewType(AssetViewType.FIXED) },
+                    text = { Text("Fixed") }
+                )
+            }
+
             // Search Bar
             OutlinedTextField(
                 value = searchQuery,
@@ -65,8 +79,7 @@ fun AssetsScreen(
                     Text(
                         when (viewType) {
                             AssetViewType.FIXED -> "Search fixed assets..."
-                            AssetViewType.CURRENT -> "Search current items..."
-                            else -> "Search all..."
+                            AssetViewType.INVENTORY -> "Search inventory assets..."
                         }
                     )
                 },
@@ -82,52 +95,8 @@ fun AssetsScreen(
                 shape = MaterialTheme.shapes.large
             )
 
-            // View Type Filters (Current, Fixed, All)
-            LazyRow(
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                item {
-                    FilterChip(
-                        selected = viewType == AssetViewType.ALL,
-                        onClick = { viewModel.setViewType(AssetViewType.ALL) },
-                        label = { Text("All") },
-                        leadingIcon = if (viewType == AssetViewType.ALL) {
-                            { Icon(Icons.Default.Check, contentDescription = null, Modifier.size(18.dp)) }
-                        } else null
-                    )
-                }
-                item {
-                    FilterChip(
-                        selected = viewType == AssetViewType.CURRENT,
-                        onClick = { viewModel.setViewType(AssetViewType.CURRENT) },
-                        label = { Text("Current") },
-                        leadingIcon = if (viewType == AssetViewType.CURRENT) {
-                            { Icon(Icons.Default.Inventory2, contentDescription = null, Modifier.size(18.dp)) }
-                        } else null,
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer
-                        )
-                    )
-                }
-                item {
-                    FilterChip(
-                        selected = viewType == AssetViewType.FIXED,
-                        onClick = { viewModel.setViewType(AssetViewType.FIXED) },
-                        label = { Text("Fixed") },
-                        leadingIcon = if (viewType == AssetViewType.FIXED) {
-                            { Icon(Icons.Default.Build, contentDescription = null, Modifier.size(18.dp)) }
-                        } else null,
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer
-                        )
-                    )
-                }
-            }
-
-            // Category Filter (only for current inventory)
-            if (viewType != AssetViewType.FIXED) {
+            // Category/type filter below search, based on selected asset type
+            if (viewType == AssetViewType.INVENTORY) {
                 LazyRow(
                     modifier = Modifier.fillMaxWidth(),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
@@ -148,10 +117,7 @@ fun AssetsScreen(
                         )
                     }
                 }
-            }
-
-            // Fixed Type Filter (only for fixed view)
-            if (viewType == AssetViewType.FIXED) {
+            } else {
                 LazyRow(
                     modifier = Modifier.fillMaxWidth(),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
@@ -169,7 +135,7 @@ fun AssetsScreen(
                 }
             }
 
-            // Low Stock Warning (only for current inventory)
+            // Low Stock Warning (only for inventory)
             if (viewType != AssetViewType.FIXED && lowStockAssets.isNotEmpty()) {
                 Card(
                     modifier = Modifier
@@ -236,11 +202,11 @@ fun AssetsScreen(
                         }
                     }
                 }
-                AssetViewType.CURRENT -> {
-                    if (currentAssets.isEmpty()) {
+                AssetViewType.INVENTORY -> {
+                    if (inventoryAssets.isEmpty()) {
                         EmptyState(
                             icon = Icons.Default.Inventory,
-                            title = "No current items found"
+                            title = "No inventory items found"
                         )
                     } else {
                         LazyColumn(
@@ -249,14 +215,14 @@ fun AssetsScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             if (selectedCategory != null || searchQuery.isNotEmpty()) {
-                                items(currentAssets) { asset ->
+                                items(inventoryAssets) { asset ->
                                     AssetCard(
                                         asset = asset,
                                         onUseAsset = { quantity -> viewModel.useAsset(asset.id, quantity) }
                                     )
                                 }
                             } else {
-                                val groupedAssets = currentAssets.groupBy { it.category }
+                                val groupedAssets = inventoryAssets.groupBy { it.category }
                                 groupedAssets.forEach { (category, categoryAssets) ->
                                     item {
                                         Text(
@@ -274,33 +240,6 @@ fun AssetsScreen(
                                     }
                                 }
                             }
-                        }
-                    }
-                }
-                else -> {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(currentAssets) { asset ->
-                            AssetCard(
-                                asset = asset,
-                                onUseAsset = { quantity -> viewModel.useAsset(asset.id, quantity) }
-                            )
-                        }
-                        items(fixedAssets) { fixed ->
-                            FixedCard(
-                                fixed = fixed,
-                                onCheckout = {
-                                    selectedFixed = fixed
-                                    showCheckoutDialog = true
-                                },
-                                onViewDetails = {
-                                    selectedFixed = fixed
-                                    showFixedDetailsDialog = true
-                                }
-                            )
                         }
                     }
                 }

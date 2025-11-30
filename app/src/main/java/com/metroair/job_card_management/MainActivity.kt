@@ -28,7 +28,6 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.metroair.job_card_management.ui.dashboard.DashboardScreen
 import com.metroair.job_card_management.ui.jobdetail.JobDetailScreen
-import com.metroair.job_card_management.ui.jobs.JobCreateScreen
 import com.metroair.job_card_management.ui.jobs.JobsScreen
 import com.metroair.job_card_management.ui.assets.AssetsScreen
 import com.metroair.job_card_management.ui.settings.SettingsScreen
@@ -69,8 +68,7 @@ fun MainScreen() {
             composable("dashboard") { DashboardScreen(navController) }
             composable("jobs") {
                 JobsScreen(
-                    onJobSelected = { jobId -> navController.navigate("jobDetail/$jobId") },
-                    onCreateJob = { navController.navigate("jobCreate") }
+                    onJobSelected = { jobId -> navController.navigate("jobDetail/$jobId") }
                 )
             }
             composable(
@@ -84,8 +82,7 @@ fun MainScreen() {
                 )
             ) {
                 JobsScreen(
-                    onJobSelected = { jobId -> navController.navigate("jobDetail/$jobId") },
-                    onCreateJob = { navController.navigate("jobCreate") }
+                    onJobSelected = { jobId -> navController.navigate("jobDetail/$jobId") }
                 )
             }
             composable("assets") { AssetsScreen() }
@@ -96,7 +93,6 @@ fun MainScreen() {
             ) {
                 JobDetailScreen(navController)
             }
-            composable("jobCreate") { JobCreateScreen(navController) }
         }
     }
 }

@@ -1,6 +1,5 @@
 package com.metroair.job_card_management.ui.jobs
 
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,11 +11,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -45,54 +44,46 @@ import com.metroair.job_card_management.domain.model.JobStatus
 @Composable
 fun JobsScreen(
     viewModel: JobsViewModel = hiltViewModel(),
-    onJobSelected: (Int) -> Unit,
-    onCreateJob: () -> Unit = {}
+    onJobSelected: (Int) -> Unit
 ) {
     val jobs by viewModel.filteredJobs.collectAsState()
     val selectedStatus by viewModel.selectedStatus.collectAsState()
-    val isActiveFilter by viewModel.isActiveFilter.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Jobs") },
-                actions = {
-                    IconButton(onClick = onCreateJob) { Icon(Icons.Default.Add, contentDescription = "New Job") }
-                }
-            )
-        }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp)
-        ) {
+    Scaffold { padding ->
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { viewModel.updateSearchQuery(it) },
-                label = { Text("Search") },
+                placeholder = { Text("Search jobs...") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            val scrollState = rememberScrollState()
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { viewModel.updateSearchQuery("") }) {
+                            Icon(Icons.Default.Clear, contentDescription = "Clear search")
+                        }
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .horizontalScroll(scrollState)
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                shape = MaterialTheme.shapes.large
+            )
+
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                FilterChip(
-                    selected = isActiveFilter,
-                    onClick = { viewModel.filterByActive() },
-                    label = { Text("Active") },
-                    leadingIcon = if (isActiveFilter) { { Icon(Icons.Default.Check, contentDescription = null) } } else null
-                )
-                JobStatus.values().forEach { status ->
+                item {
+                    FilterChip(
+                        selected = selectedStatus == null,
+                        onClick = { viewModel.clearFilters() },
+                        label = { Text("All") },
+                        leadingIcon = if (selectedStatus == null) { { Icon(Icons.Default.Check, contentDescription = null) } } else null
+                    )
+                }
+                items(JobStatus.values()) { status ->
                     FilterChip(
                         selected = selectedStatus == status,
                         onClick = { viewModel.filterByStatus(status) },
@@ -102,7 +93,7 @@ fun JobsScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             if (jobs.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -134,7 +125,6 @@ private fun JobCardItem(job: JobCard, onClick: () -> Unit) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 job.scheduledDate?.let { date -> Text("Date: $date", style = MaterialTheme.typography.bodySmall) }
                 job.scheduledTime?.let { time -> Text("Time: $time", style = MaterialTheme.typography.bodySmall) }
-                Text(job.priority.name, style = MaterialTheme.typography.labelSmall)
             }
         }
     }

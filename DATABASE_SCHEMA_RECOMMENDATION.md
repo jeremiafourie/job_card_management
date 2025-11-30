@@ -97,7 +97,6 @@ CREATE TABLE job_cards (
     title               TEXT NOT NULL,
     description         TEXT,
     job_type            TEXT NOT NULL,
-    priority            TEXT DEFAULT 'NORMAL',
 
     -- Location
     service_address     TEXT NOT NULL,
@@ -153,7 +152,6 @@ CREATE INDEX idx_job_cards_job_number ON job_cards(job_number);
 | `job_number` | Human-readable identifier (e.g., "JC-2024-001") |
 | `customer_*` | Denormalized customer info for offline access |
 | `job_type` | INSTALLATION \| REPAIR \| SERVICE \| INSPECTION |
-| `priority` | LOW \| NORMAL \| HIGH \| URGENT |
 | `scheduled_date` | YYYY-MM-DD format for date queries |
 | `estimated_duration` | Expected minutes to complete |
 | `status_history` | JSON array - full workflow audit trail (see below) |
@@ -615,7 +613,7 @@ Receipt metadata is stored directly on `job_purchases` (one receipt per purchase
 │  │ id (PK)     │────────►│ id (PK)                                      │   │
 │  │ username    │         │ job_number (UNIQUE)                          │   │
 │  │ name        │         │ customer_name, phone, email                   │   │
-│  │ email       │         │ title, description, job_type, priority        │   │
+│  │ email       │         │ title, description, job_type                  │   │
 │  │ phone       │         │ service_address, lat, lng                     │   │
 │  │ auth_token  │         │ scheduled_date, status_history (JSON)         │   │
 │  └─────────────┘         │ travel_distance, work details, photos         │   │

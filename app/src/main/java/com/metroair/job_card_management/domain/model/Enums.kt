@@ -18,10 +18,3 @@ enum class JobType {
     SERVICE,
     INSPECTION
 }
-
-enum class JobPriority {
-    LOW,
-    NORMAL,
-    HIGH,
-    URGENT
-}

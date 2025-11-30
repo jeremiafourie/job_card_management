@@ -99,7 +99,7 @@ fun DashboardScreen(
                         MaterialTheme.colorScheme.primary
                     else
                         MaterialTheme.colorScheme.onSurfaceVariant,
-                    onClick = { navController.navigate("jobs?status=ACTIVE") }
+                    onClick = { navController.navigate("jobs?status=BUSY") }
                 )
                 StatCard(
                     modifier = Modifier.weight(1f),
@@ -223,7 +223,7 @@ fun DashboardScreen(
                 showAssetDialog = false
                 currentJobForPhoto = null
             },
-            onCurrentAssetAdded = { itemName, itemCode, quantity ->
+            onInventoryAssetAdded = { itemName, itemCode, quantity ->
                 viewModel.addAssetToJob(currentJobForPhoto!!.id, itemName, itemCode, quantity)
                 showAssetDialog = false
                 currentJobForPhoto = null
@@ -280,7 +280,6 @@ fun CurrentJobCard(
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
-                // Cancel button in top right
                 if (job.status != JobStatus.COMPLETED && job.status != JobStatus.CANCELLED) {
                     IconButton(
                         onClick = { showCancelDialog = true },
@@ -710,13 +709,7 @@ fun PausedJobListItem(
     onEnRouteClick: () -> Unit,
     onClick: () -> Unit
 ) {
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
-        )
-    ) {
+    Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp)
         ) {
@@ -726,23 +719,10 @@ fun PausedJobListItem(
                 verticalAlignment = Alignment.Top
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = job.title,
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        AssistChip(
-                            onClick = { },
-                            label = { Text("PAUSED", style = MaterialTheme.typography.labelSmall) },
-                            colors = AssistChipDefaults.assistChipColors(
-                                containerColor = MaterialTheme.colorScheme.errorContainer
-                            ),
-                            modifier = Modifier.height(24.dp)
-                        )
-                    }
+                    Text(
+                        text = job.title,
+                        style = MaterialTheme.typography.titleMedium
+                    )
                     Text(
                         text = "${job.customerName} • Job #${job.jobNumber}",
                         style = MaterialTheme.typography.bodySmall,

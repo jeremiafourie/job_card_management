@@ -14,7 +14,6 @@
 - **Photos still serialized as JSON**: They now point to app-managed FileProvider URIs (copied into app storage), so expiry risk is low. A future migration to a normalized `job_photos` table would simplify querying/sync and remove JSON parsing.
 
 ## Documentation Gaps
-- Job creation flow and fixed-asset checkout UX are not documented; add to SYSTEM_DESIGN.md once implemented.
 - Sync strategy for status histories (jobs/fixed) is undefined; document expected server reconciliation to avoid local-only divergence.
 
 ## Testing / Reliability

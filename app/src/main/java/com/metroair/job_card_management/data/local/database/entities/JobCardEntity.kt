@@ -26,7 +26,6 @@ data class JobCardEntity(
     val title: String,
     val description: String?,
     @ColumnInfo(name = "job_type") val jobType: String,
-    val priority: String = "NORMAL",
     @ColumnInfo(name = "status_history") val statusHistory: String = "[]", // JSON array of status events
 
     // Scheduling

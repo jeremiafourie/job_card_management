@@ -176,18 +176,11 @@ fun JobDetailScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text("Job Information", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    androidx.compose.material3.AssistChip(
-                                        onClick = {},
-                                        label = { Text(job.priority.name) },
-                                        leadingIcon = { Icon(Icons.Default.Flag, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                                    )
-                                    androidx.compose.material3.AssistChip(
-                                        onClick = {},
-                                        label = { Text(job.status.name) },
-                                        leadingIcon = { Icon(Icons.Default.Schedule, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                                    )
-                                }
+                                androidx.compose.material3.AssistChip(
+                                    onClick = {},
+                                    label = { Text(job.status.name) },
+                                    leadingIcon = { Icon(Icons.Default.Flag, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                                )
                             }
 
                             Spacer(modifier = Modifier.height(12.dp))
@@ -209,7 +202,6 @@ fun JobDetailScreen(
                                     Text("Est. $est minutes", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
-                            Spacer(modifier = Modifier.height(8.dp))
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -360,6 +352,10 @@ fun JobDetailScreen(
                 }
 
                 item {
+                    JobTimelineCard(job = job)
+                }
+
+                item {
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Text("Work & Notes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -385,6 +381,18 @@ fun JobDetailScreen(
                                 label = { Text("Issues encountered") },
                                 minLines = 2,
                                 maxLines = 4,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            OutlinedTextField(
+                                value = uiState.travelDistance?.toString().orEmpty(),
+                                onValueChange = { input ->
+                                    val sanitized = input.replace(',', '.')
+                                    val distance = sanitized.toDoubleOrNull()
+                                    viewModel.updateTravelDistance(distance)
+                                },
+                                label = { Text("Travel distance (km)") },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
                                 modifier = Modifier.fillMaxWidth()
                             )
                             Row(
@@ -415,10 +423,6 @@ fun JobDetailScreen(
                             }
                         }
                     }
-                }
-
-                item {
-                    JobTimelineCard(job = job)
                 }
             }
         }
@@ -609,7 +613,7 @@ fun JobDetailScreen(
     if (showMaterialDialog && currentJob != null) {
         AddJobMaterialDialog(
             onDismiss = { showMaterialDialog = false },
-            onCurrentAssetAdded = { itemName, itemCode, quantity ->
+            onInventoryAssetAdded = { itemName, itemCode, quantity ->
                 viewModel.addInventoryUsage(currentJob.id, itemName, itemCode, quantity)
                 showMaterialDialog = false
             },

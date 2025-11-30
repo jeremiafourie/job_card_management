@@ -86,6 +86,7 @@ class JobDetailViewModel @Inject constructor(
     fun updateTechnicianNotes(value: String) { _uiState.update { it.copy(technicianNotes = value) }; scheduleAutoSave() }
     fun updateRequiresFollowUp(value: Boolean) { _uiState.update { it.copy(requiresFollowUp = value) }; scheduleAutoSave() }
     fun updateFollowUpNotes(value: String) { _uiState.update { it.copy(followUpNotes = value) }; scheduleAutoSave() }
+    fun updateTravelDistance(value: Double?) { _uiState.update { it.copy(travelDistance = value) }; scheduleAutoSave() }
     fun setCustomerSignature(signature: String) = _uiState.update { it.copy(customerSignature = signature) }
 
     fun startJob() { viewModelScope.launch { jobCardRepository.startJob(jobId) } }
@@ -192,7 +193,8 @@ class JobDetailViewModel @Inject constructor(
                 issuesEncountered = state.issuesEncountered.ifBlank { null },
                 customerSignature = state.customerSignature,
                 requiresFollowUp = state.requiresFollowUp,
-                followUpNotes = state.followUpNotes.ifBlank { null }
+                followUpNotes = state.followUpNotes.ifBlank { null },
+                travelDistance = state.travelDistance
             )
         }
     }
@@ -207,7 +209,8 @@ class JobDetailViewModel @Inject constructor(
                 issuesEncountered = state.issuesEncountered.ifBlank { null },
                 customerSignature = state.customerSignature,
                 requiresFollowUp = state.requiresFollowUp,
-                followUpNotes = state.followUpNotes.ifBlank { null }
+                followUpNotes = state.followUpNotes.ifBlank { null },
+                travelDistance = state.travelDistance
             )
         }
     }
@@ -247,6 +250,7 @@ data class JobDetailUiState(
     val customerSignature: String? = null,
     val requiresFollowUp: Boolean = false,
     val followUpNotes: String = "",
+    val travelDistance: Double? = null,
     val errorMessage: String? = null,
     val successMessage: String? = null,
     val isCompleted: Boolean = false

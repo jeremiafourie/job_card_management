@@ -517,7 +517,7 @@ Provided estimate of $450-600 for panel upgrade."
 
 **Steps**:
 1. **Open App** → Tap "Assets" tab
-2. **View "Current Assets"** → See all consumable inventory
+2. **View "Inventory Assets"** → See all consumable inventory
 3. **Check Stock Levels**:
    - R410A: 25.5 kg ✅ (Good)
    - Capacitor 35uF: 3 pieces ⚠️ (LOW STOCK)
@@ -898,7 +898,7 @@ Provided estimate of $450-600 for panel upgrade."
 **Layout**:
 ```
 ┌────────────────────────────────────┐
-│  Current Assets  |  Fixed Assets   │ ← Tabs
+│  Inventory Assets  |  Fixed Assets   │ ← Tabs
 ├────────────────────────────────────┤
 │  🔍 [Search assets...]             │
 ├────────────────────────────────────┤
@@ -927,7 +927,7 @@ Provided estimate of $450-600 for panel upgrade."
 └────────────────────────────────────┘
 ```
 
-**Current Assets Tab** (Consumables):
+**Inventory Assets Tab** (Consumables):
 
 **Asset Card Shows**:
 - Item name
@@ -953,7 +953,7 @@ Provided estimate of $450-600 for panel upgrade."
 
 ```
 ┌────────────────────────────────────┐
-│  Current Assets  |  Fixed Assets   │
+│  Inventory Assets  |  Fixed Assets   │
 ├────────────────────────────────────┤
 │  🔍 [Search fixed assets...]       │
 ├────────────────────────────────────┤
@@ -1068,21 +1068,9 @@ Provided estimate of $450-600 for panel upgrade."
 │  Total Time: 5h 30m                │
 │  Last Sync: 5 minutes ago          │
 ├────────────────────────────────────┤
-│  🔧 APP PREFERENCES                │
-│  › Notifications                   │
-│  › Theme (Light/Dark/Auto)         │
-│  › Map Provider (Google/Waze)      │
-│  › Camera Settings                 │
-│  › Data & Sync                     │
-├────────────────────────────────────┤
-│  📄 LEGAL & INFO                   │
-│  › Open Source Licenses            │
-│  › Privacy Policy                  │
-│  › Terms of Service                │
-│  › About App (v1.0)                │
-├────────────────────────────────────┤
-│  🚪 ACCOUNT                        │
-│  [🔴 Logout]                       │
+│  📄 INFO                           │
+│  › About (local build)             │
+│  › Contact Support                 │
 └────────────────────────────────────┘
 ```
 

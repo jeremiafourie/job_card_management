@@ -11,7 +11,6 @@ data class JobCard(
     val description: String?,
     val jobType: JobType,
     val status: JobStatus,
-    val priority: JobPriority = JobPriority.NORMAL,
     val scheduledDate: String?,
     val scheduledTime: String?,
     val serviceAddress: String?,

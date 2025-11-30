@@ -21,7 +21,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 sealed class JobMaterial {
-    data class CurrentAsset(val asset: Asset) : JobMaterial()
+    data class InventoryAsset(val asset: Asset) : JobMaterial()
     data class FixedAsset(val fixed: Fixed) : JobMaterial()
 }
 
@@ -29,13 +29,13 @@ sealed class JobMaterial {
 @Composable
 fun AddJobMaterialDialog(
     onDismiss: () -> Unit,
-    onCurrentAssetAdded: (String, String, Double) -> Unit, // itemName, itemCode, quantity
+    onInventoryAssetAdded: (String, String, Double) -> Unit, // itemName, itemCode, quantity
     onFixedAssetAdded: (Int, String) -> Unit, // fixedId, reason (checkout reason)
     availableAssets: List<Asset>,
     availableFixed: List<Fixed>,
     jobNumber: String = ""
 ) {
-    var selectedTab by remember { mutableStateOf(0) } // 0 = Current, 1 = Fixed
+    var selectedTab by remember { mutableStateOf(0) } // 0 = Inventory, 1 = Fixed
     var searchQuery by remember { mutableStateOf("") }
     var selectedMaterial by remember { mutableStateOf<JobMaterial?>(null) }
     var quantity by remember { mutableStateOf("") }
@@ -53,7 +53,7 @@ fun AddJobMaterialDialog(
             searchJob = coroutineScope.launch {
                 delay(300) // Debounce
                 filteredMaterials = if (selectedTab == 0) {
-                    // Search Current assets
+                    // Search inventory assets
                     availableAssets
                         .filter { asset ->
                             asset.itemName.contains(searchQuery, ignoreCase = true) ||
@@ -61,7 +61,7 @@ fun AddJobMaterialDialog(
                             asset.category.contains(searchQuery, ignoreCase = true)
                         }
                         .take(5)
-                        .map { JobMaterial.CurrentAsset(it) }
+                        .map { JobMaterial.InventoryAsset(it) }
                 } else {
                     // Search Fixed assets
                     availableFixed
@@ -94,7 +94,7 @@ fun AddJobMaterialDialog(
                     .heightIn(max = 500.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Tab selector for Current vs Fixed
+                // Tab selector for Inventory vs Fixed
                 TabRow(selectedTabIndex = selectedTab) {
                     Tab(
                         selected = selectedTab == 0,
@@ -103,7 +103,7 @@ fun AddJobMaterialDialog(
                             selectedMaterial = null
                             searchQuery = ""
                         },
-                        text = { Text("Current Stock") },
+                        text = { Text("Inventory") },
                         icon = { Icon(Icons.Default.Inventory, contentDescription = null) }
                     )
                     Tab(
@@ -122,7 +122,7 @@ fun AddJobMaterialDialog(
                 Column {
                     OutlinedTextField(
                         value = when (val material = selectedMaterial) {
-                            is JobMaterial.CurrentAsset -> "${material.asset.itemName} (${material.asset.itemCode})"
+                            is JobMaterial.InventoryAsset -> "${material.asset.itemName} (${material.asset.itemCode})"
                             is JobMaterial.FixedAsset -> "${material.fixed.fixedName} (${material.fixed.fixedCode})"
                             null -> searchQuery
                         },
@@ -189,7 +189,7 @@ fun AddJobMaterialDialog(
 
                 // Selected material info
                 when (val material = selectedMaterial) {
-                    is JobMaterial.CurrentAsset -> {
+                    is JobMaterial.InventoryAsset -> {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(
@@ -200,7 +200,7 @@ fun AddJobMaterialDialog(
                                 modifier = Modifier.padding(12.dp)
                             ) {
                                 Text(
-                                    text = "Selected Current Asset",
+                                    text = "Selected Inventory Asset",
                                     style = MaterialTheme.typography.labelMedium
                                 )
                                 Text(
@@ -231,7 +231,7 @@ fun AddJobMaterialDialog(
                             }
                         }
 
-                        // Quantity input for Current assets
+                        // Quantity input for inventory assets
                         OutlinedTextField(
                             value = quantity,
                             onValueChange = { newValue ->
@@ -371,10 +371,10 @@ fun AddJobMaterialDialog(
             Button(
                 onClick = {
                     when (val material = selectedMaterial) {
-                        is JobMaterial.CurrentAsset -> {
+                        is JobMaterial.InventoryAsset -> {
                             quantity.toDoubleOrNull()?.let { qty ->
                                 if (qty > 0 && qty <= material.asset.currentStock) {
-                                    onCurrentAssetAdded(
+                                    onInventoryAssetAdded(
                                         material.asset.itemName,
                                         material.asset.itemCode,
                                         qty
@@ -392,7 +392,7 @@ fun AddJobMaterialDialog(
                     }
                 },
                 enabled = when (val material = selectedMaterial) {
-                    is JobMaterial.CurrentAsset ->
+                    is JobMaterial.InventoryAsset ->
                         quantity.toDoubleOrNull()?.let { it > 0 && it <= material.asset.currentStock } == true
                     is JobMaterial.FixedAsset -> true
                     null -> false
@@ -429,7 +429,7 @@ private fun MaterialSearchItem(
             verticalAlignment = Alignment.CenterVertically
         ) {
             when (material) {
-                is JobMaterial.CurrentAsset -> {
+                is JobMaterial.InventoryAsset -> {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = material.asset.itemName,

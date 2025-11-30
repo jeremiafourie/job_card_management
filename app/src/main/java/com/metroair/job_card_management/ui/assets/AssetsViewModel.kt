@@ -28,10 +28,10 @@ class AssetsViewModel @Inject constructor(
     private val _selectedFixedType = MutableStateFlow<FixedType?>(null)
     val selectedFixedType: StateFlow<FixedType?> = _selectedFixedType.asStateFlow()
 
-    private val _viewType = MutableStateFlow(AssetViewType.ALL)
+    private val _viewType = MutableStateFlow(AssetViewType.INVENTORY)
     val viewType: StateFlow<AssetViewType> = _viewType.asStateFlow()
 
-    // Current Assets (consumables/inventory)
+    // Inventory Assets (consumables/inventory)
     private val allAssets: StateFlow<List<Asset>> = assetRepository.getAllAssets()
         .stateIn(
             scope = viewModelScope,
@@ -47,7 +47,7 @@ class AssetsViewModel @Inject constructor(
             initialValue = emptyList()
         )
 
-    // Get unique categories from current assets
+    // Get unique categories from inventory assets
     val categories: StateFlow<List<String>> = allAssets
         .map { assets ->
             assets.map { it.category }.distinct().sorted()
@@ -58,7 +58,7 @@ class AssetsViewModel @Inject constructor(
             initialValue = emptyList()
         )
 
-    // Filtered current assets based on search and category
+    // Filtered inventory assets based on search and category
     val filteredAssets: StateFlow<List<Asset>> = combine(
         allAssets,
         _searchQuery,
@@ -66,7 +66,7 @@ class AssetsViewModel @Inject constructor(
         _viewType
     ) { assets, query, category, viewType ->
         if (viewType == AssetViewType.FIXED) {
-            emptyList() // Don't show current assets when in fixed view
+            emptyList() // Don't show inventory assets when in fixed view
         } else {
             assets.filter { asset ->
                 val matchesSearch = query.isBlank() ||
@@ -76,7 +76,7 @@ class AssetsViewModel @Inject constructor(
 
                 val matchesCategory = category == null || asset.category == category
 
-                // Filter out tools from current inventory view (they should be in fixed assets)
+                // Filter out tools from inventory view (they should be in fixed assets)
                 val isNotTool = !asset.category.equals("Tools", ignoreCase = true)
 
                 matchesSearch && matchesCategory && isNotTool
@@ -95,8 +95,8 @@ class AssetsViewModel @Inject constructor(
         _selectedFixedType,
         _viewType
     ) { fixedAssets, query, fixedType, viewType ->
-        if (viewType == AssetViewType.CURRENT) {
-            emptyList() // Don't show fixed assets when in current view
+        if (viewType == AssetViewType.INVENTORY) {
+            emptyList() // Don't show fixed assets when in inventory view
         } else {
             fixedAssets.filter { fixed ->
                 val matchesSearch = query.isBlank() ||
@@ -136,11 +136,7 @@ class AssetsViewModel @Inject constructor(
             AssetViewType.FIXED -> {
                 _selectedCategory.value = null
             }
-            AssetViewType.CURRENT -> {
-                _selectedFixedType.value = null
-            }
-            else -> {
-                _selectedCategory.value = null
+            AssetViewType.INVENTORY -> {
                 _selectedFixedType.value = null
             }
         }
@@ -152,7 +148,7 @@ class AssetsViewModel @Inject constructor(
         _selectedFixedType.value = null
     }
 
-    // Current Asset operations
+    // Inventory Asset operations
     fun useAsset(assetId: Int, quantity: Double) {
         viewModelScope.launch {
             assetRepository.useAsset(assetId, quantity)

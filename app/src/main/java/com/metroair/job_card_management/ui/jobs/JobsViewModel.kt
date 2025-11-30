@@ -29,9 +29,6 @@ class JobsViewModel @Inject constructor(
     private val _selectedStatus = MutableStateFlow<JobStatus?>(null)
     val selectedStatus: StateFlow<JobStatus?> = _selectedStatus.asStateFlow()
 
-    private val _isActiveFilter = MutableStateFlow(false)
-    val isActiveFilter: StateFlow<Boolean> = _isActiveFilter.asStateFlow()
-
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
@@ -60,17 +57,12 @@ class JobsViewModel @Inject constructor(
         combine(
             jobs,
             searchResults,
-            _selectedStatus,
-            _isActiveFilter
-        ) { allJobs, search, statusFilter, activeFilter ->
+            _selectedStatus
+        ) { allJobs, search, statusFilter ->
             var base = if (_searchQuery.value.isNotBlank()) search else allJobs
 
             statusFilter?.let { status ->
                 base = base.filter { it.status == status }
-            }
-
-            if (activeFilter) {
-                base = base.filter { it.status == JobStatus.BUSY || it.status == JobStatus.EN_ROUTE || it.status == JobStatus.PAUSED }
             }
             base
         }.stateIn(
@@ -80,18 +72,11 @@ class JobsViewModel @Inject constructor(
         )
 
     fun filterByStatus(status: JobStatus?) {
-        _selectedStatus.value = status
-        _isActiveFilter.value = false
-    }
-
-    fun filterByActive() {
-        _isActiveFilter.value = true
-        _selectedStatus.value = null
+        _selectedStatus.value = if (_selectedStatus.value == status) null else status
     }
 
     fun clearFilters() {
         _selectedStatus.value = null
-        _isActiveFilter.value = false
     }
 
     fun updateSearchQuery(query: String) {
@@ -145,25 +130,4 @@ class JobsViewModel @Inject constructor(
         }
     }
 
-    suspend fun createJob(
-        jobNumber: String,
-        customerName: String,
-        customerPhone: String,
-        customerAddress: String,
-        title: String,
-        description: String?,
-        jobType: com.metroair.job_card_management.domain.model.JobType,
-        scheduledDate: String,
-        scheduledTime: String?
-    ): Int? = jobCardRepository.createJob(
-        jobNumber = jobNumber,
-        customerName = customerName,
-        customerPhone = customerPhone,
-        customerAddress = customerAddress,
-        title = title,
-        description = description,
-        jobType = jobType,
-        scheduledDate = scheduledDate,
-        scheduledTime = scheduledTime
-    )
 }

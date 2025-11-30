@@ -227,7 +227,6 @@ abstract class JobCardDatabase : RoomDatabase() {
                     title = "Split AC Installation - Master Bedroom",
                     description = "Install new 12000 BTU inverter with outdoor mounting and condensate management.",
                     jobType = "INSTALLATION",
-                    priority = "HIGH",
                     statusHistory = statusHistory(
                         StatusEvent("AVAILABLE", now - (day * 3)),
                         StatusEvent("AWAITING", now - (day * 2)),
@@ -264,7 +263,6 @@ abstract class JobCardDatabase : RoomDatabase() {
                     title = "Bedroom AC Not Cooling",
                     description = "Unit cycling and not reaching setpoint, suspected low gas or blocked filter.",
                     jobType = "REPAIR",
-                    priority = "URGENT",
                     statusHistory = statusHistory(
                         StatusEvent("AVAILABLE", now - (day * 2)),
                         StatusEvent("AWAITING", now - (day / 2))
@@ -288,7 +286,6 @@ abstract class JobCardDatabase : RoomDatabase() {
                     title = "Office AC Service - Server Room",
                     description = "Quarterly preventive maintenance for server room cooling.",
                     jobType = "SERVICE",
-                    priority = "NORMAL",
                     statusHistory = statusHistory(
                         StatusEvent("AVAILABLE", now - (day * 7)),
                         StatusEvent("PENDING", now - (day * 6)),

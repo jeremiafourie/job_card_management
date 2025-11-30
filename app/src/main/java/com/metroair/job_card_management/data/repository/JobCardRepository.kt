@@ -4,7 +4,6 @@ import com.metroair.job_card_management.data.local.database.dao.JobCardDao
 import com.metroair.job_card_management.data.local.database.entities.JobCardEntity
 import com.metroair.job_card_management.di.IoDispatcher
 import com.metroair.job_card_management.domain.model.JobCard
-import com.metroair.job_card_management.domain.model.JobPriority
 import com.metroair.job_card_management.domain.model.JobStatus
 import com.metroair.job_card_management.domain.model.JobType
 import kotlinx.coroutines.CoroutineDispatcher
@@ -43,7 +42,8 @@ interface JobCardRepository {
         issuesEncountered: String?,
         customerSignature: String?,
         requiresFollowUp: Boolean,
-        followUpNotes: String?
+        followUpNotes: String?,
+        travelDistance: Double?
     ): Boolean
     suspend fun addCustomerSignature(jobId: Int, signature: String): Boolean
     suspend fun addBeforePhotos(jobId: Int, photos: List<String>): Boolean
@@ -124,8 +124,19 @@ class JobCardRepositoryImpl @Inject constructor(
     override suspend fun startJob(jobId: Int): Boolean = withContext(ioDispatcher) {
         val job = jobCardDao.getJobById(jobId) ?: return@withContext false
         val currentStatus = deriveStatus(job.statusHistory)
+        if (currentStatus == JobStatus.AVAILABLE || currentStatus == JobStatus.AWAITING) {
+            // Accepting job moves it to PENDING
+            val now = System.currentTimeMillis()
+            jobCardDao.updateJob(
+                job.copy(
+                    statusHistory = appendStatusEvent(job.statusHistory, JobStatus.PENDING.name),
+                    updatedAt = now
+                )
+            )
+            return@withContext true
+        }
         if (currentStatus == JobStatus.PENDING && !canStartNewJob()) return@withContext false
-        val newStatus = if (currentStatus == JobStatus.PENDING || currentStatus == JobStatus.AWAITING || currentStatus == JobStatus.AVAILABLE) {
+        val newStatus = if (currentStatus == JobStatus.PENDING) {
             JobStatus.EN_ROUTE
         } else {
             JobStatus.BUSY
@@ -223,7 +234,8 @@ class JobCardRepositoryImpl @Inject constructor(
         issuesEncountered: String?,
         customerSignature: String?,
         requiresFollowUp: Boolean,
-        followUpNotes: String?
+        followUpNotes: String?,
+        travelDistance: Double?
     ): Boolean = withContext(ioDispatcher) {
         try {
             val job = jobCardDao.getJobById(jobId) ?: return@withContext false
@@ -235,6 +247,7 @@ class JobCardRepositoryImpl @Inject constructor(
                     customerSignature = customerSignature,
                     requiresFollowUp = requiresFollowUp,
                     followUpNotes = followUpNotes,
+                    travelDistance = travelDistance,
                     updatedAt = System.currentTimeMillis()
                 )
             )
@@ -393,7 +406,6 @@ class JobCardRepositoryImpl @Inject constructor(
                 title = title,
                 description = description,
                 jobType = jobType.name,
-                priority = JobPriority.NORMAL.name,
                 statusHistory = appendStatusEvent("[]", JobStatus.AVAILABLE.name),
                 scheduledDate = scheduledDate,
                 scheduledTime = scheduledTime,
@@ -500,14 +512,13 @@ class JobCardRepositoryImpl @Inject constructor(
             customerAddress = customerAddress,
             title = title,
             description = description,
-            jobType = try { JobType.valueOf(jobType) } catch (_: Exception) { JobType.SERVICE },
-            status = deriveStatus(statusHistory),
-            priority = try { JobPriority.valueOf(priority) } catch (_: Exception) { JobPriority.NORMAL },
-            scheduledDate = scheduledDate,
-            scheduledTime = scheduledTime,
-            serviceAddress = serviceAddress,
-            latitude = latitude,
-            longitude = longitude,
+                jobType = try { JobType.valueOf(jobType) } catch (_: Exception) { JobType.SERVICE },
+                status = deriveStatus(statusHistory),
+                scheduledDate = scheduledDate,
+                scheduledTime = scheduledTime,
+                serviceAddress = serviceAddress,
+                latitude = latitude,
+                longitude = longitude,
             estimatedDuration = estimatedDuration,
             travelDistance = travelDistance,
             statusHistory = statusHistory,

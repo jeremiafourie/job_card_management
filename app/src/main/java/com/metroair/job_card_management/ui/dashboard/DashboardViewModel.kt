@@ -31,8 +31,22 @@ class DashboardViewModel @Inject constructor(
     val jobs: StateFlow<List<JobCard>> = jobCardRepository.getJobs()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    private fun List<JobCard>.latestActive(): JobCard? {
+        return this
+            .filter { it.status == JobStatus.BUSY || it.status == JobStatus.EN_ROUTE || it.status == JobStatus.PAUSED }
+            .sortedWith(compareByDescending<JobCard> {
+                when (it.status) {
+                    JobStatus.BUSY -> 3
+                    JobStatus.EN_ROUTE -> 2
+                    JobStatus.PAUSED -> 1
+                    else -> 0
+                }
+            }.thenByDescending { it.id })
+            .firstOrNull()
+    }
+
     val currentActiveJob: StateFlow<JobCard?> = jobs
-        .map { list -> list.firstOrNull { it.status == JobStatus.BUSY || it.status == JobStatus.EN_ROUTE || it.status == JobStatus.PAUSED } }
+        .map { list -> list.latestActive() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val pausedJobs: StateFlow<List<JobCard>> = jobs
@@ -53,19 +67,20 @@ class DashboardViewModel @Inject constructor(
     val availableFixed = fixedRepository.getAvailableFixed()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val stats: StateFlow<DashboardStats> = combine(jobs) { jobsList ->
-        val list = jobsList.firstOrNull() ?: emptyList<JobCard>()
-        val awaiting = list.count { it.status == JobStatus.AWAITING }
-        val pending = list.count { it.status == JobStatus.PENDING }
-        val active = list.count { it.status == JobStatus.BUSY || it.status == JobStatus.EN_ROUTE || it.status == JobStatus.PAUSED }
-        val available = list.count { it.status == JobStatus.AVAILABLE }
-        DashboardStats(
-            availableJobs = available,
-            awaitingJobs = awaiting,
-            activeJob = active,
-            pending = pending
-        )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DashboardStats())
+    val stats: StateFlow<DashboardStats> = jobs
+        .map { list ->
+            val awaiting = list.count { it.status == JobStatus.AWAITING }
+            val pending = list.count { it.status == JobStatus.PENDING }
+            val active = list.count { it.status == JobStatus.BUSY || it.status == JobStatus.EN_ROUTE || it.status == JobStatus.PAUSED }
+            val available = list.count { it.status == JobStatus.AVAILABLE }
+            DashboardStats(
+                availableJobs = available,
+                awaitingJobs = awaiting,
+                activeJob = active,
+                pending = pending
+            )
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DashboardStats())
 
     fun clearMessage() {
         _uiMessage.value = null

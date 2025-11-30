@@ -6,6 +6,7 @@
 - **ORM**: Room (AndroidX) with `fallbackToDestructiveMigration` (add migrations before production)
 - **Workflow source of truth**: `statusHistory` JSON on `job_cards` and `fixed_assets`
 - **Media**: Job photos stored as JSON arrays of `{ uri, notes }` where URIs are FileProvider paths to app-managed copies (camera or gallery copies into `.../files/Pictures`). Receipts stored on `job_purchases` as single receipt fields in the same storage area.
+- **Technician-entered fields**: Travel distance (km) is captured on the job detail screen alongside work/notes.
 - **Single-tech app**: `technician` table holds the single logged-in user (id=1)
 
 ## Tables
@@ -14,7 +15,7 @@
 |-------|---------|------------|-------|
 | `technician` | Singleton technician profile | `id=1`, `username`, `authToken`, `lastSyncTime` | Always exactly one row |
 | `customers` | Customer master data | `name`, `phone`, `email`, `address`, `area` | Job cards denormalize these for offline use |
-| `job_cards` | Core jobs | `jobNumber` (UQ), `statusHistory`, `priority`, photos, feedback | Status values: AVAILABLE, AWAITING, PENDING, EN_ROUTE, BUSY, PAUSED, COMPLETED, SIGNED, CANCELLED |
+| `job_cards` | Core jobs | `jobNumber` (UQ), `statusHistory`, photos, feedback | Status values: AVAILABLE, AWAITING, PENDING, EN_ROUTE, BUSY, PAUSED, COMPLETED, SIGNED, CANCELLED |
 | `inventory_assets` | Consumables/parts | `itemCode` (UQ), `currentStock`, `minimumStock`, `unitOfMeasure` | Low stock when `currentStock <= minimumStock` |
 | `fixed_assets` | Tools/equipment | `fixedCode` (UQ), `fixedType`, `statusHistory`, `isAvailable`, `currentHolder` | Availability comes from latest status event + open checkouts |
 | `job_inventory_usage` | Consumables used per job | `jobId`, `inventoryId`, `quantity`, `unitOfMeasure`, `recordedAt` | Drives stock deductions |
@@ -33,7 +34,6 @@ CREATE TABLE job_cards (
     title TEXT NOT NULL,
     description TEXT,
     job_type TEXT NOT NULL,
-    priority TEXT NOT NULL DEFAULT 'NORMAL',
     status_history TEXT NOT NULL DEFAULT '[]',
     scheduled_date TEXT,
     scheduled_time TEXT,
