@@ -7,7 +7,31 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -19,6 +43,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.metroair.job_card_management.domain.model.Asset
 import com.metroair.job_card_management.domain.model.Fixed
 import com.metroair.job_card_management.domain.model.FixedType
+import com.metroair.job_card_management.domain.model.JobCard
 import kotlinx.coroutines.launch
 
 enum class AssetViewType { INVENTORY, FIXED }
@@ -35,6 +60,7 @@ fun AssetsScreen(
     val selectedCategory by viewModel.selectedCategory.collectAsStateWithLifecycle()
     val viewType by viewModel.viewType.collectAsStateWithLifecycle()
     val selectedFixedType by viewModel.selectedFixedType.collectAsStateWithLifecycle()
+    val activeJobs by viewModel.activeJobs.collectAsStateWithLifecycle()
     val lowStockAssets = inventoryAssets.filter { it.isLowStock }
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
@@ -218,7 +244,8 @@ fun AssetsScreen(
                                 items(inventoryAssets) { asset ->
                                     AssetCard(
                                         asset = asset,
-                                        onUseAsset = { quantity -> viewModel.useAsset(asset.id, quantity) }
+                                        activeJobs = activeJobs,
+                                        onAddToJob = { jobId, qty -> viewModel.addAssetToJob(asset, jobId, qty) }
                                     )
                                 }
                             } else {
@@ -235,7 +262,8 @@ fun AssetsScreen(
                                     items(categoryAssets) { asset ->
                                         AssetCard(
                                             asset = asset,
-                                            onUseAsset = { quantity -> viewModel.useAsset(asset.id, quantity) }
+                                            activeJobs = activeJobs,
+                                            onAddToJob = { jobId, qty -> viewModel.addAssetToJob(asset, jobId, qty) }
                                         )
                                     }
                                 }
@@ -303,13 +331,14 @@ private fun EmptyState(icon: androidx.compose.ui.graphics.vector.ImageVector, ti
 @Composable
 fun AssetCard(
     asset: Asset,
-    onUseAsset: (Double) -> Unit
+    activeJobs: List<JobCard>,
+    onAddToJob: (jobId: Int, Double) -> Unit
 ) {
-    var showUseDialog by remember { mutableStateOf(false) }
+    var showAddDialog by remember { mutableStateOf(false) }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        onClick = { showUseDialog = true }
+        onClick = { showAddDialog = true }
     ) {
         Column(
             modifier = Modifier.padding(16.dp)
@@ -371,13 +400,14 @@ fun AssetCard(
         }
     }
 
-    if (showUseDialog) {
-        AssetUseDialog(
+    if (showAddDialog) {
+        AddAssetToJobDialog(
             asset = asset,
-            onDismiss = { showUseDialog = false },
-            onConfirm = {
-                onUseAsset(it)
-                showUseDialog = false
+            activeJobs = activeJobs,
+            onDismiss = { showAddDialog = false },
+            onConfirm = { jobId, qty ->
+                onAddToJob(jobId, qty)
+                showAddDialog = false
             }
         )
     }
@@ -385,43 +415,80 @@ fun AssetCard(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AssetUseDialog(
+fun AddAssetToJobDialog(
     asset: Asset,
+    activeJobs: List<JobCard>,
     onDismiss: () -> Unit,
-    onConfirm: (Double) -> Unit
+    onConfirm: (Int, Double) -> Unit
 ) {
     var quantity by remember { mutableStateOf("") }
+    var expanded by remember { mutableStateOf(false) }
+    var selectedJob by remember { mutableStateOf<JobCard?>(activeJobs.firstOrNull()) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Use Asset") },
+        title = { Text("Add to Job") },
         text = {
-            Column {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = quantity,
                     onValueChange = { quantity = it },
-                    label = { Text("Quantity to use") },
+                    label = { Text("Quantity to add") },
                     placeholder = { Text("Available: ${asset.currentStock}") },
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Number
                     ),
                     singleLine = true
                 )
+                Box {
+                    OutlinedTextField(
+                        readOnly = true,
+                        value = selectedJob?.let { "${it.jobNumber} • ${it.title}" } ?: "No active jobs",
+                        onValueChange = {},
+                        label = { Text("Select job") },
+                        trailingIcon = {
+                            IconButton(onClick = { expanded = !expanded }, enabled = activeJobs.isNotEmpty()) {
+                                Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = activeJobs.isNotEmpty()
+                    )
+                    DropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false }
+                    ) {
+                        activeJobs.forEach { job ->
+                            DropdownMenuItem(
+                                text = { Text("${job.jobNumber} • ${job.title}") },
+                                onClick = {
+                                    selectedJob = job
+                                    expanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+                if (activeJobs.isEmpty()) {
+                    Text("No active jobs to add to (EN_ROUTE, BUSY, or PAUSED).", color = MaterialTheme.colorScheme.error)
+                }
             }
         },
         confirmButton = {
             TextButton(
                 onClick = {
                     val qty = quantity.toDoubleOrNull() ?: 0.0
-                    if (qty > 0 && qty <= asset.currentStock) {
-                        onConfirm(qty)
+                    val jobId = selectedJob?.id
+                    if (qty > 0 && qty <= asset.currentStock && jobId != null) {
+                        onConfirm(jobId, qty)
                     }
                 },
                 enabled = quantity.isNotEmpty() &&
                          (quantity.toDoubleOrNull() ?: 0.0) > 0 &&
-                         (quantity.toDoubleOrNull() ?: 0.0) <= asset.currentStock
+                         (quantity.toDoubleOrNull() ?: 0.0) <= asset.currentStock &&
+                         selectedJob != null
             ) {
-                Text("Use")
+                Text("Add")
             }
         },
         dismissButton = {

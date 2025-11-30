@@ -4,10 +4,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.metroair.job_card_management.data.repository.AssetRepository
 import com.metroair.job_card_management.data.repository.FixedRepository
+import com.metroair.job_card_management.data.repository.JobCardRepository
 import com.metroair.job_card_management.domain.model.Asset
 import com.metroair.job_card_management.domain.model.Fixed
 import com.metroair.job_card_management.domain.model.FixedCheckout
 import com.metroair.job_card_management.domain.model.FixedType
+import com.metroair.job_card_management.domain.model.JobCard
+import com.metroair.job_card_management.domain.model.JobStatus
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -16,7 +19,8 @@ import javax.inject.Inject
 @HiltViewModel
 class AssetsViewModel @Inject constructor(
     private val assetRepository: AssetRepository,
-    private val fixedRepository: FixedRepository
+    private val fixedRepository: FixedRepository,
+    private val jobCardRepository: JobCardRepository
 ) : ViewModel() {
 
     private val _searchQuery = MutableStateFlow("")
@@ -46,6 +50,10 @@ class AssetsViewModel @Inject constructor(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
+
+    val activeJobs: StateFlow<List<JobCard>> = jobCardRepository.getJobs()
+        .map { list -> list.filter { it.status == JobStatus.BUSY || it.status == JobStatus.EN_ROUTE || it.status == JobStatus.PAUSED } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Get unique categories from inventory assets
     val categories: StateFlow<List<String>> = allAssets
@@ -149,9 +157,16 @@ class AssetsViewModel @Inject constructor(
     }
 
     // Inventory Asset operations
-    fun useAsset(assetId: Int, quantity: Double) {
+    fun addAssetToJob(asset: Asset, jobId: Int, quantity: Double) {
         viewModelScope.launch {
-            assetRepository.useAsset(assetId, quantity)
+            assetRepository.recordUsage(
+                jobId = jobId,
+                assetId = asset.id,
+                itemCode = asset.itemCode,
+                itemName = asset.itemName,
+                quantity = quantity,
+                unit = asset.unitOfMeasure
+            )
         }
     }
 
