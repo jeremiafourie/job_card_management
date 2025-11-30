@@ -16,7 +16,6 @@ interface AssetRepository {
     fun getAssetsByCategory(category: String): Flow<List<Asset>>
     fun getLowStock(): Flow<List<Asset>>
     fun getUsageForJob(jobId: Int): Flow<List<com.metroair.job_card_management.domain.model.InventoryUsage>>
-    suspend fun useAsset(assetId: Int, quantity: Double)
     suspend fun restoreAsset(assetId: Int, quantity: Double)
     suspend fun recordUsage(
         jobId: Int,
@@ -104,10 +103,6 @@ class AssetRepositoryImpl @Inject constructor(
             }
             .flowOn(ioDispatcher)
 
-    override suspend fun useAsset(assetId: Int, quantity: Double) {
-        withContext(ioDispatcher) { assetDao.useAsset(assetId, quantity, System.currentTimeMillis()) }
-    }
-
     override suspend fun restoreAsset(assetId: Int, quantity: Double) {
         withContext(ioDispatcher) { assetDao.restoreAsset(assetId, quantity, System.currentTimeMillis()) }
     }
@@ -131,7 +126,7 @@ class AssetRepositoryImpl @Inject constructor(
                     unitOfMeasure = unit
                 )
             )
-            assetDao.useAsset(assetId, quantity, System.currentTimeMillis())
+            assetDao.restoreAsset(assetId, -quantity, System.currentTimeMillis()) // subtract stock by adding negative
         }
     }
 }

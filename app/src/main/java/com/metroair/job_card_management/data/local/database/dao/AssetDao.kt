@@ -19,9 +19,6 @@ interface AssetDao {
     @Query("SELECT * FROM inventory_assets WHERE current_stock <= minimum_stock")
     fun getLowStock(): Flow<List<AssetEntity>>
 
-    @Query("UPDATE inventory_assets SET current_stock = current_stock - :quantity, updated_at = :timestamp WHERE id = :id")
-    suspend fun useAsset(id: Int, quantity: Double, timestamp: Long = System.currentTimeMillis())
-
     @Query("UPDATE inventory_assets SET current_stock = current_stock + :quantity, updated_at = :timestamp WHERE id = :id")
     suspend fun restoreAsset(id: Int, quantity: Double, timestamp: Long = System.currentTimeMillis())
 

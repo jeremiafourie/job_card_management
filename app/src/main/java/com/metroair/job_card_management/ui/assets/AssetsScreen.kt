@@ -240,33 +240,12 @@ fun AssetsScreen(
                             contentPadding = PaddingValues(16.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            if (selectedCategory != null || searchQuery.isNotEmpty()) {
-                                items(inventoryAssets) { asset ->
-                                    AssetCard(
-                                        asset = asset,
-                                        activeJobs = activeJobs,
-                                        onAddToJob = { jobId, qty -> viewModel.addAssetToJob(asset, jobId, qty) }
-                                    )
-                                }
-                            } else {
-                                val groupedAssets = inventoryAssets.groupBy { it.category }
-                                groupedAssets.forEach { (category, categoryAssets) ->
-                                    item {
-                                        Text(
-                                            text = category,
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.padding(vertical = 8.dp)
-                                        )
-                                    }
-                                    items(categoryAssets) { asset ->
-                                        AssetCard(
-                                            asset = asset,
-                                            activeJobs = activeJobs,
-                                            onAddToJob = { jobId, qty -> viewModel.addAssetToJob(asset, jobId, qty) }
-                                        )
-                                    }
-                                }
+                            items(inventoryAssets) { asset ->
+                                AssetCard(
+                                    asset = asset,
+                                    activeJobs = activeJobs,
+                                    onAddToJob = { jobId, qty -> viewModel.addAssetToJob(asset, jobId, qty) }
+                                )
                             }
                         }
                     }
